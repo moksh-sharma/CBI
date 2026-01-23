@@ -1,0 +1,20 @@
+{
+  "name": "enterprise-bi-platform",
+  "version": "1.0.0",
+  "description": "Enterprise visualization platform inspired by Power BI",
+  "main": "index.js",
+  "scripts": {
+    "dev": "concurrently \"npm run server\" \"npm run client\"",
+    "dev:safe": "node scripts/start-dev.js",
+    "server": "cd backend && npm run dev",
+    "client": "cd frontend && npm start",
+    "install-all": "node scripts/install-all.js",
+    "install-all:legacy": "npm install && cd backend && npm install && cd ../frontend && npm install"
+  },
+  "keywords": ["bi", "visualization", "dashboard", "enterprise"],
+  "author": "",
+  "license": "ISC",
+  "devDependencies": {
+    "concurrently": "^8.2.2"
+  }
+}
