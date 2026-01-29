@@ -1,12 +1,20 @@
-import { useState, useEffect, useCallback } from 'react';
+import { useState, useEffect, useCallback, useRef, useMemo } from 'react';
 import { useNavigate, useParams } from 'react-router';
-import { ArrowLeft, Download, Search, Filter, Calendar, Loader2 } from 'lucide-react';
+import { ArrowLeft, Download, Search, Filter, Calendar, Loader2, ChevronDown, Image, FileDown } from 'lucide-react';
+import html2canvas from 'html2canvas';
+import { jsPDF } from 'jspdf';
 import { apiGet } from '../../lib/api';
+import { useTheme } from '../../contexts/ThemeContext';
+import { getThemeColors } from '../../lib/themeColors';
+import { applyGlobalFilters, getRegionOptionsFromData } from '../../lib/dashboardFilters';
 import { renderWidget, Widget } from '../shared/WidgetRenderer';
+import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from '../ui/dropdown-menu';
 
 export default function InteractiveDashboard() {
   const navigate = useNavigate();
   const { id } = useParams();
+  const { isDark } = useTheme();
+  const colors = getThemeColors(isDark);
   const [globalSearch, setGlobalSearch] = useState('');
   const [dateRange, setDateRange] = useState('last-30-days');
   const [selectedRegion, setSelectedRegion] = useState('all');
@@ -15,10 +23,12 @@ export default function InteractiveDashboard() {
   const [widgets, setWidgets] = useState<Widget[]>([]);
   const [datasetData, setDatasetData] = useState<Record<number, unknown[]>>({});
   const [loadingData, setLoadingData] = useState<Record<number, boolean>>({});
+  const [exporting, setExporting] = useState(false);
+  const canvasRef = useRef<HTMLDivElement>(null);
 
   const fetchDatasetData = useCallback(async (datasetId: number) => {
     if (loadingData[datasetId] || datasetData[datasetId]) return;
-    
+
     setLoadingData((prev) => ({ ...prev, [datasetId]: true }));
     try {
       const res = await apiGet<{ data: unknown[]; schema: any }>(`/api/data/datasets/${datasetId}`);
@@ -61,12 +71,88 @@ export default function InteractiveDashboard() {
     fetchDashboard();
   }, [id, fetchDatasetData]);
 
-  const getWidgetData = (widget: Widget): unknown[] => {
-    if (widget.datasetId && datasetData[widget.datasetId]) {
-      return datasetData[widget.datasetId];
+  const getWidgetData = useCallback(
+    (widget: Widget): unknown[] => {
+      const raw = widget.datasetId && datasetData[widget.datasetId]
+        ? (datasetData[widget.datasetId] as any[])
+        : [];
+      return applyGlobalFilters(raw, {
+        search: globalSearch,
+        dateRange,
+        region: selectedRegion,
+      });
+    },
+    [datasetData, globalSearch, dateRange, selectedRegion]
+  );
+
+  // PowerBI-style: Region options from actual data (discovered region/country column)
+  const regionOptions = useMemo(() => {
+    const allRows = (Object.values(datasetData) as any[][]).flat();
+    return getRegionOptionsFromData(allRows);
+  }, [datasetData]);
+
+  // Keep selectedRegion valid when options change (e.g. after data load)
+  useEffect(() => {
+    if (selectedRegion !== 'all' && !regionOptions.some((o) => o.value === selectedRegion)) {
+      setSelectedRegion('all');
     }
-    return [];
-  };
+  }, [regionOptions, selectedRegion]);
+
+  const handleExportPng = useCallback(async () => {
+    if (!canvasRef.current || !dashboardData) return;
+    setExporting(true);
+    try {
+      await new Promise((r) => setTimeout(r, 200));
+      const el = canvasRef.current;
+      if (!el) return;
+      const canvas = await html2canvas(el, {
+        scale: 2,
+        useCORS: true,
+        backgroundColor: isDark ? '#0f172a' : '#f8fafc',
+        logging: false,
+      });
+      canvas.toBlob((blob) => {
+        if (!blob) return;
+        const a = document.createElement('a');
+        a.href = URL.createObjectURL(blob);
+        a.download = `${(dashboardData.name || 'dashboard').replace(/\s+/g, '-')}.png`;
+        a.click();
+        URL.revokeObjectURL(a.href);
+      });
+    } catch (err) {
+      console.error('Export PNG failed:', err);
+    } finally {
+      setExporting(false);
+    }
+  }, [dashboardData, isDark]);
+
+  const handleExportPdf = useCallback(async () => {
+    if (!canvasRef.current || !dashboardData) return;
+    setExporting(true);
+    try {
+      await new Promise((r) => setTimeout(r, 200));
+      const el = canvasRef.current;
+      if (!el) return;
+      const canvas = await html2canvas(el, {
+        scale: 2,
+        useCORS: true,
+        backgroundColor: isDark ? '#0f172a' : '#f8fafc',
+        logging: false,
+      });
+      const img = canvas.toDataURL('image/png');
+      const isLandscape = canvas.width > canvas.height;
+      const pdf = new jsPDF({ orientation: isLandscape ? 'l' : 'p', unit: 'pt', format: 'a4' });
+      const a4W = isLandscape ? 842 : 595;
+      const a4H = isLandscape ? 595 : 842;
+      const fit = Math.min(a4W / canvas.width, a4H / canvas.height);
+      pdf.addImage(img, 'PNG', 0, 0, canvas.width * fit, canvas.height * fit);
+      pdf.save(`${(dashboardData.name || 'dashboard').replace(/\s+/g, '-')}.pdf`);
+    } catch (err) {
+      console.error('Export PDF failed:', err);
+    } finally {
+      setExporting(false);
+    }
+  }, [dashboardData, isDark]);
 
   if (loading) {
     return (
@@ -84,6 +170,11 @@ export default function InteractiveDashboard() {
     );
   }
 
+  const canvasMinHeight = widgets.length
+    ? Math.max(...widgets.map((w) => w.position.y + w.size.height), 0) + 24
+    : 320;
+  const mode = isDark ? 'dark' : 'light';
+
   return (
     <div className="space-y-6">
       {/* Header */}
@@ -91,101 +182,175 @@ export default function InteractiveDashboard() {
         <div className="flex items-center gap-4">
           <button
             onClick={() => navigate('/viewer/dashboard')}
-            className="p-2 text-gray-400 hover:text-gray-600 transition-colors"
+            className="p-2 rounded-lg transition-colors"
+            style={{ color: colors.muted }}
+            onMouseEnter={(e) => { e.currentTarget.style.color = colors.text; e.currentTarget.style.background = isDark ? 'rgba(255,255,255,0.06)' : 'rgba(0,0,0,0.04)'; }}
+            onMouseLeave={(e) => { e.currentTarget.style.color = colors.muted; e.currentTarget.style.background = 'transparent'; }}
           >
             <ArrowLeft className="w-5 h-5" />
           </button>
           <div>
-            <h1 className="text-2xl font-bold text-gray-900">{dashboardData.name || 'Dashboard'}</h1>
-            <p className="text-gray-600">Real-time metrics and KPIs</p>
+            <h1 className="text-2xl font-bold" style={{ color: colors.text }}>{dashboardData.name || 'Dashboard'}</h1>
+            <p style={{ color: colors.muted }}>Real-time metrics and KPIs</p>
           </div>
         </div>
-        <button className="flex items-center px-4 py-2 bg-green-600 text-white rounded-lg hover:bg-green-700 transition-colors">
-          <Download className="w-4 h-4 mr-2" />
-          Export Data
-        </button>
+        <DropdownMenu>
+          <DropdownMenuTrigger asChild>
+            <button
+              disabled={widgets.length === 0 || exporting}
+              className="flex items-center px-4 py-2 bg-green-600 text-white rounded-lg hover:bg-green-700 transition-colors disabled:opacity-50 disabled:cursor-not-allowed gap-2"
+            >
+              {exporting ? <Loader2 className="w-4 h-4 animate-spin" /> : <Download className="w-4 h-4" />}
+              Export
+              <ChevronDown className="w-4 h-4" />
+            </button>
+          </DropdownMenuTrigger>
+          <DropdownMenuContent
+            align="end"
+            className="min-w-[180px] border"
+            style={{
+              backgroundColor: colors.cardBg,
+              borderColor: colors.cardBorder,
+              color: colors.text,
+            }}
+          >
+            <DropdownMenuItem
+              onSelect={() => handleExportPng()}
+              disabled={widgets.length === 0}
+              style={{ color: colors.text }}
+              className={isDark ? 'data-[highlighted]:bg-white/10' : 'data-[highlighted]:bg-green-50'}
+            >
+              <Image className="w-4 h-4 mr-2" />
+              Download as PNG
+            </DropdownMenuItem>
+            <DropdownMenuItem
+              onSelect={() => handleExportPdf()}
+              disabled={widgets.length === 0}
+              style={{ color: colors.text }}
+              className={isDark ? 'data-[highlighted]:bg-white/10' : 'data-[highlighted]:bg-green-50'}
+            >
+              <FileDown className="w-4 h-4 mr-2" />
+              Download as PDF
+            </DropdownMenuItem>
+          </DropdownMenuContent>
+        </DropdownMenu>
       </div>
 
       {/* Global Controls */}
-      <div className="bg-white rounded-xl p-6 shadow-sm border border-gray-200">
+      <div
+        className="rounded-xl p-6 shadow-sm border"
+        style={{
+          backgroundColor: colors.cardBg,
+          borderColor: colors.cardBorder,
+        }}
+      >
         <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-          {/* Global Search */}
           <div className="relative">
-            <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-5 h-5 text-gray-400" />
+            <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-5 h-5" style={{ color: colors.muted }} />
             <input
               type="text"
               value={globalSearch}
               onChange={(e) => setGlobalSearch(e.target.value)}
               placeholder="Search across all data..."
-              className="w-full pl-10 pr-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-green-500 focus:border-transparent outline-none"
+              className="w-full pl-10 pr-4 py-2 rounded-lg border focus:ring-2 focus:ring-green-500 focus:border-transparent outline-none placeholder:opacity-60"
+              style={{
+                backgroundColor: colors.inputBg,
+                borderColor: colors.inputBorder,
+                color: colors.text,
+              }}
             />
           </div>
-
-          {/* Date Range Slicer */}
           <div className="relative">
-            <Calendar className="absolute left-3 top-1/2 -translate-y-1/2 w-5 h-5 text-gray-400" />
+            <Calendar className="absolute left-3 top-1/2 -translate-y-1/2 w-5 h-5" style={{ color: colors.muted }} />
             <select
               value={dateRange}
               onChange={(e) => setDateRange(e.target.value)}
-              className="w-full pl-10 pr-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-green-500 focus:border-transparent outline-none appearance-none"
+              className="w-full pl-10 pr-4 py-2 rounded-lg border focus:ring-2 focus:ring-green-500 focus:border-transparent outline-none appearance-none"
+              style={{
+                backgroundColor: colors.inputBg,
+                borderColor: colors.inputBorder,
+                color: colors.text,
+              }}
             >
-              <option value="last-7-days">Last 7 Days</option>
-              <option value="last-30-days">Last 30 Days</option>
-              <option value="last-90-days">Last 90 Days</option>
-              <option value="this-year">This Year</option>
-              <option value="custom">Custom Range</option>
+              <option value="last-7-days" style={{ backgroundColor: isDark ? '#1e293b' : '#ffffff', color: isDark ? '#f1f5f9' : '#1e293b' }}>Last 7 Days</option>
+              <option value="last-30-days" style={{ backgroundColor: isDark ? '#1e293b' : '#ffffff', color: isDark ? '#f1f5f9' : '#1e293b' }}>Last 30 Days</option>
+              <option value="last-90-days" style={{ backgroundColor: isDark ? '#1e293b' : '#ffffff', color: isDark ? '#f1f5f9' : '#1e293b' }}>Last 90 Days</option>
+              <option value="this-year" style={{ backgroundColor: isDark ? '#1e293b' : '#ffffff', color: isDark ? '#f1f5f9' : '#1e293b' }}>This Year</option>
+              <option value="custom" style={{ backgroundColor: isDark ? '#1e293b' : '#ffffff', color: isDark ? '#f1f5f9' : '#1e293b' }}>Custom Range</option>
             </select>
           </div>
-
-          {/* Region Filter */}
           <div className="relative">
-            <Filter className="absolute left-3 top-1/2 -translate-y-1/2 w-5 h-5 text-gray-400" />
+            <Filter className="absolute left-3 top-1/2 -translate-y-1/2 w-5 h-5" style={{ color: colors.muted }} />
             <select
               value={selectedRegion}
               onChange={(e) => setSelectedRegion(e.target.value)}
-              className="w-full pl-10 pr-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-green-500 focus:border-transparent outline-none appearance-none"
+              className="w-full pl-10 pr-4 py-2 rounded-lg border focus:ring-2 focus:ring-green-500 focus:border-transparent outline-none appearance-none"
+              style={{
+                backgroundColor: colors.inputBg,
+                borderColor: colors.inputBorder,
+                color: colors.text,
+              }}
             >
-              <option value="all">All Regions</option>
-              <option value="north-america">North America</option>
-              <option value="europe">Europe</option>
-              <option value="asia-pacific">Asia Pacific</option>
-              <option value="latin-america">Latin America</option>
+              {regionOptions.map((opt) => (
+                <option key={opt.value} value={opt.value} style={{ backgroundColor: isDark ? '#1e293b' : '#ffffff', color: isDark ? '#f1f5f9' : '#1e293b' }}>{opt.label}</option>
+              ))}
             </select>
           </div>
         </div>
       </div>
 
-      {/* Dashboard Widgets */}
+      {/* Dashboard Canvas: absolute layout to match builder, no overlap, overflow contained */}
       {widgets.length === 0 ? (
-        <div className="text-center py-12 text-gray-500">
+        <div className="text-center py-12" style={{ color: colors.muted }}>
           <p>No widgets configured for this dashboard.</p>
         </div>
       ) : (
-        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
+        <div
+          ref={canvasRef}
+          className="relative w-full p-6"
+          style={{ minHeight: canvasMinHeight }}
+        >
           {widgets.map((widget) => {
             const widgetData = getWidgetData(widget);
             const isLoading = widget.datasetId ? loadingData[widget.datasetId] : false;
-            
+
             return (
               <div
                 key={widget.id}
-                className="bg-white rounded-lg shadow-sm border border-gray-200 overflow-hidden"
+                className="rounded-lg shadow-sm overflow-hidden"
                 style={{
-                  width: `${widget.size.width}px`,
-                  height: `${widget.size.height}px`,
-                  minHeight: '300px',
+                  position: 'absolute',
+                  left: widget.position.x,
+                  top: widget.position.y,
+                  width: widget.size.width,
+                  height: widget.size.height,
+                  minHeight: 160,
+                  backgroundColor: colors.cardBg,
+                  border: `1px solid ${colors.cardBorder}`,
                 }}
               >
-                <div className="px-4 py-3 border-b border-gray-200 bg-gray-50">
-                  <h3 className="font-medium text-gray-900 text-sm">{widget.title}</h3>
+                <div
+                  className="px-4 py-3 border-b"
+                  style={{
+                    borderColor: colors.cardBorder,
+                    backgroundColor: isDark ? 'rgba(255,255,255,0.04)' : '#f9fafb',
+                  }}
+                >
+                  <h3 className="font-medium text-sm truncate" style={{ color: colors.text }} title={widget.title}>{widget.title}</h3>
                 </div>
-                <div className="p-4" style={{ height: 'calc(100% - 48px)' }}>
+                <div
+                  className="p-4 overflow-hidden"
+                  style={{
+                    height: 'calc(100% - 48px)',
+                    minHeight: 0,
+                  }}
+                >
                   {isLoading ? (
                     <div className="flex items-center justify-center h-full">
-                      <Loader2 className="w-6 h-6 text-indigo-600 animate-spin" />
+                      <Loader2 className="w-6 h-6 text-indigo-500 animate-spin" />
                     </div>
                   ) : (
-                    renderWidget(widget, widgetData)
+                    renderWidget(widget, widgetData, { mode })
                   )}
                 </div>
               </div>

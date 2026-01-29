@@ -11,44 +11,90 @@ const pool = require('../database/db');
 const { validationResult } = require('express-validator');
 
 /**
+ * In-memory cache for API data
+ * Caches API responses for faster data fetching during dashboard building
+ */
+const apiDataCache = new Map();
+const CACHE_TTL = 5 * 60 * 1000; // 5 minutes cache TTL
+
+/**
+ * Get cached data or null if expired/not found
+ */
+const getCachedData = (datasetId) => {
+    const cached = apiDataCache.get(datasetId);
+    if (cached && Date.now() - cached.timestamp < CACHE_TTL) {
+        console.log(`Cache HIT for dataset ${datasetId}`);
+        return cached.data;
+    }
+    if (cached) {
+        apiDataCache.delete(datasetId); // Remove expired cache
+    }
+    return null;
+};
+
+/**
+ * Set cache data
+ */
+const setCachedData = (datasetId, data) => {
+    apiDataCache.set(datasetId, {
+        data: data,
+        timestamp: Date.now()
+    });
+    console.log(`Cache SET for dataset ${datasetId}`);
+};
+
+/**
+ * Clear cache for a specific dataset
+ */
+const clearCache = (datasetId) => {
+    if (datasetId) {
+        apiDataCache.delete(datasetId);
+        console.log(`Cache CLEARED for dataset ${datasetId}`);
+    } else {
+        apiDataCache.clear();
+        console.log('Cache CLEARED for all datasets');
+    }
+};
+
+/**
  * Upload and parse Excel file
  */
 const uploadExcel = async (req, res) => {
     try {
         if (!req.file) {
-            return res.status(400).json({ 
-                success: false, 
-                message: 'No file uploaded' 
+            return res.status(400).json({
+                success: false,
+                message: 'No file uploaded'
             });
         }
-        
+
         const { name, description } = req.body;
         const file = req.file;
-        
+
         // Read Excel file
         const workbook = XLSX.readFile(file.path);
         const sheetName = workbook.SheetNames[0];
         const worksheet = workbook.Sheets[sheetName];
-        
+
         // Convert to JSON
         const data = XLSX.utils.sheet_to_json(worksheet, { raw: false });
-        
+
         if (data.length === 0) {
             // Clean up uploaded file
             await fs.unlink(file.path);
-            return res.status(400).json({ 
-                success: false, 
-                message: 'Excel file is empty or has no data rows' 
+            return res.status(400).json({
+                success: false,
+                message: 'Excel file is empty or has no data rows'
             });
         }
-        
+
         // Get column names and infer types
         const columns = Object.keys(data[0]);
         const schemaDefinition = columns.map(col => {
             // Sample first few rows to infer type
             const sampleValues = data.slice(0, 10).map(row => row[col]).filter(v => v !== null && v !== undefined);
             let type = 'string';
-            
+
             if (sampleValues.length > 0) {
                 const firstValue = sampleValues[0];
                 if (!isNaN(firstValue) && firstValue !== '') {
@@ -57,13 +103,13 @@ const uploadExcel = async (req, res) => {
                     type = 'date';
                 }
             }
-            
+
             return {
                 name: col,
                 type: type
             };
         });
-        
+
         // Create dataset record
         const [datasetResult] = await pool.query(
             `INSERT INTO datasets (name, description, source_type, source_config, schema_definition, row_count, created_by) 
@@ -77,9 +123,9 @@ const uploadExcel = async (req, res) => {
                 req.user.id
             ]
         );
-        
+
         const datasetId = datasetResult.insertId;
-        
+
         // Store Excel upload metadata
         await pool.query(
             `INSERT INTO excel_upload_metadata 
@@ -94,19 +140,19 @@ const uploadExcel = async (req, res) => {
                 req.user.id
             ]
         );
-        
+
         // Store data rows in batches
         const batchSize = 1000;
         for (let i = 0; i < data.length; i += batchSize) {
             const batch = data.slice(i, i + batchSize);
             const values = batch.map(row => [datasetId, JSON.stringify(row)]);
-            
+
             await pool.query(
                 `INSERT INTO dataset_data (dataset_id, row_data) VALUES ?`,
                 [values]
             );
         }
-        
+
         // Fetch created dataset
         const [datasets] = await pool.query(
             `SELECT d.*, u.email as created_by_email
@@ -115,7 +161,7 @@ const uploadExcel = async (req, res) => {
              WHERE d.id = ?`,
             [datasetId]
         );
-        
+
         res.status(201).json({
             success: true,
             message: 'Excel file uploaded and parsed successfully',
@@ -126,7 +172,7 @@ const uploadExcel = async (req, res) => {
         });
     } catch (error) {
         console.error('Upload Excel error:', error);
-        
+
         // Clean up uploaded file on error
         if (req.file?.path) {
             try {
@@ -135,10 +181,10 @@ const uploadExcel = async (req, res) => {
                 console.error('Error cleaning up file:', e);
             }
         }
-        
-        res.status(500).json({ 
-            success: false, 
-            message: 'Error uploading and parsing Excel file' 
+
+        res.status(500).json({
+            success: false,
+            message: 'Error uploading and parsing Excel file'
         });
     }
 };
@@ -154,7 +200,7 @@ const getDatasets = async (req, res) => {
              JOIN users u ON d.created_by = u.id
              ORDER BY d.created_at DESC`
         );
-        
+
         res.json({ success: true, data: datasets });
     } catch (error) {
         console.error('Get datasets error:', error);
@@ -170,9 +216,10 @@ const getDatasets = async (req, res) => {
 const getDatasetById = async (req, res) => {
     try {
         const { id } = req.params;
-        const { page = 1, limit = 100 } = req.query;
+        const { page = 1, limit = 100, refresh = 'false' } = req.query;
+        const forceRefresh = refresh === 'true';
         const offset = (page - 1) * limit;
-        
+
         // Get dataset metadata - include connection_status and last_error
         const [datasets] = await pool.query(
             `SELECT d.*, u.email as created_by_email
@@ -181,42 +228,60 @@ const getDatasetById = async (req, res) => {
              WHERE d.id = ?`,
             [id]
         );
-        
+
         if (datasets.length === 0) {
-            return res.status(404).json({ 
-                success: false, 
-                message: 'Dataset not found' 
+            return res.status(404).json({
+                success: false,
+                message: 'Dataset not found'
             });
         }
-        
+
         const dataset = datasets[0];
-        
-        // If source is API, fetch live data from API
+
+        // If source is API, fetch live data from API (with caching)
         if (dataset.source_type === 'api') {
+            // Check cache first for faster response (unless force refresh requested)
+            if (!forceRefresh) {
+                const cachedData = getCachedData(id);
+                if (cachedData) {
+                    return res.json({
+                        success: true,
+                        data: {
+                            ...dataset,
+                            ...cachedData,
+                            from_cache: true
+                        }
+                    });
+                }
+            } else {
+                // Clear cache if force refresh
+                clearCache(id);
+            }
+
             try {
                 const axios = require('axios');
                 const sourceConfig = typeof dataset.source_config === 'string'
                     ? JSON.parse(dataset.source_config)
                     : dataset.source_config;
-                
+
                 // Get API configuration
                 const [apiConfigs] = await pool.query(
                     'SELECT * FROM api_configurations WHERE id = ? AND is_active = TRUE',
                     [sourceConfig.api_config_id]
                 );
-                
+
                 if (apiConfigs.length === 0) {
                     return res.status(404).json({
                         success: false,
                         message: 'API configuration not found or inactive'
                     });
                 }
-                
+
                 const apiConfig = apiConfigs[0];
-                
+
                 // Build request
                 const url = `${apiConfig.base_url}${apiConfig.endpoint || ''}`;
-                
+
                 // Parse headers - MySQL JSON columns might already be objects
                 let headers = {};
                 if (apiConfig.headers) {
@@ -235,7 +300,7 @@ const getDatasetById = async (req, res) => {
                         headers = {};
                     }
                 }
-                
+
                 // Add authentication
                 if (apiConfig.auth_type !== 'none' && apiConfig.auth_config) {
                     try {
@@ -251,7 +316,7 @@ const getDatasetById = async (req, res) => {
                         } else {
                             authConfig = {};
                         }
-                        
+
                         if (authConfig && typeof authConfig === 'object') {
                             if (apiConfig.auth_type === 'bearer' && authConfig.token) {
                                 headers['Authorization'] = `Bearer ${authConfig.token}`;
@@ -266,7 +331,7 @@ const getDatasetById = async (req, res) => {
                         console.error('Error parsing auth_config in getDatasetById:', e);
                     }
                 }
-                
+
                 // Use EXACT method and timeout from config - NO defaults
                 if (!apiConfig.method || apiConfig.method.trim() === '') {
                     return res.status(400).json({
@@ -280,7 +345,7 @@ const getDatasetById = async (req, res) => {
                         message: 'Timeout is required in API configuration'
                     });
                 }
-                
+
                 // Make live API request - use EXACT config values
                 const response = await axios({
                     method: apiConfig.method.trim().toUpperCase(),
@@ -288,9 +353,9 @@ const getDatasetById = async (req, res) => {
                     headers: headers,
                     timeout: apiConfig.timeout_ms
                 });
-                
+
                 let allData = response.data;
-                
+
                 // Handle different response formats
                 if (!Array.isArray(allData)) {
                     if (allData.data && Array.isArray(allData.data)) {
@@ -302,25 +367,32 @@ const getDatasetById = async (req, res) => {
                         allData = [allData];
                     }
                 }
-                
+
                 // For API sources, return ALL data (no pagination limit)
                 // This ensures users can see all entries from the API
                 const total = allData.length;
-                
+
                 console.log(`Fetched ${total} records from API for dataset ${id}`);
-                
+
+                // Cache the response for faster subsequent requests
+                const responseData = {
+                    data: allData,
+                    is_live: true,
+                    pagination: {
+                        page: 1,
+                        limit: total,
+                        total: total,
+                        totalPages: 1
+                    }
+                };
+                setCachedData(id, responseData);
+
                 return res.json({
                     success: true,
                     data: {
                         ...dataset,
-                        data: allData, // Return all data, not paginated
-                        is_live: true,
-                        pagination: {
-                            page: 1,
-                            limit: total, // Set limit to total to show all
-                            total: total,
-                            totalPages: 1 // All data on one "page"
-                        }
+                        ...responseData,
+                        from_cache: false
                     }
                 });
             } catch (apiError) {
@@ -331,7 +403,7 @@ const getDatasetById = async (req, res) => {
                 });
             }
         }
-        
+
         // For Excel sources, fetch from database
         // Get data rows (paginated)
         const [rows] = await pool.query(
@@ -341,7 +413,7 @@ const getDatasetById = async (req, res) => {
              LIMIT ? OFFSET ?`,
             [id, parseInt(limit), offset]
         );
-        
+
         // Parse row_data - it might be a string or already an object (MySQL JSON type)
         const data = rows.map(row => {
             if (typeof row.row_data === 'string') {
@@ -354,14 +426,14 @@ const getDatasetById = async (req, res) => {
             }
             return row.row_data; // Already an object
         });
-        
+
         // Get total count
         const [countResult] = await pool.query(
             'SELECT COUNT(*) as total FROM dataset_data WHERE dataset_id = ?',
             [id]
         );
         const total = countResult[0].total;
-        
+
         res.json({
             success: true,
             data: {
@@ -388,30 +460,30 @@ const getDatasetById = async (req, res) => {
 const deleteDataset = async (req, res) => {
     try {
         const { id } = req.params;
-        
+
         // Get dataset to find file path from multiple sources
         const [datasets] = await pool.query(
             'SELECT source_type, source_config FROM datasets WHERE id = ?',
             [id]
         );
-        
+
         if (datasets.length === 0) {
-            return res.status(404).json({ 
-                success: false, 
-                message: 'Dataset not found' 
+            return res.status(404).json({
+                success: false,
+                message: 'Dataset not found'
             });
         }
-        
+
         const dataset = datasets[0];
         let filePath = null;
-        
+
         // Try to get file path from source_config
         if (dataset.source_config) {
             try {
-                const sourceConfig = typeof dataset.source_config === 'string' 
-                    ? JSON.parse(dataset.source_config) 
+                const sourceConfig = typeof dataset.source_config === 'string'
+                    ? JSON.parse(dataset.source_config)
                     : dataset.source_config;
-                
+
                 if (sourceConfig && sourceConfig.file_path) {
                     filePath = sourceConfig.file_path;
                 }
@@ -419,7 +491,7 @@ const deleteDataset = async (req, res) => {
                 console.error('Error parsing source_config:', e);
             }
         }
-        
+
         // Also check excel_upload_metadata table for file path
         if (!filePath && dataset.source_type === 'excel') {
             try {
@@ -434,15 +506,15 @@ const deleteDataset = async (req, res) => {
                 console.error('Error fetching metadata:', e);
             }
         }
-        
+
         // Delete the physical file if it exists
         if (filePath) {
             try {
                 // Resolve absolute path if relative
-                const absolutePath = path.isAbsolute(filePath) 
-                    ? filePath 
+                const absolutePath = path.isAbsolute(filePath)
+                    ? filePath
                     : path.join(__dirname, '..', filePath);
-                
+
                 // Check if file exists before trying to delete
                 if (fsSync.existsSync(absolutePath)) {
                     await fs.unlink(absolutePath);
@@ -466,20 +538,20 @@ const deleteDataset = async (req, res) => {
         } else {
             console.log('⚠ No file path found for dataset deletion');
         }
-        
+
         // Delete dataset (cascade will delete data rows and metadata)
         await pool.query('DELETE FROM datasets WHERE id = ?', [id]);
-        
+
         res.json({
             success: true,
             message: 'Dataset and associated file deleted successfully'
         });
     } catch (error) {
         console.error('Delete dataset error:', error);
-        res.status(500).json({ 
-            success: false, 
+        res.status(500).json({
+            success: false,
             message: 'Error deleting dataset',
-            error: error.message 
+            error: error.message
         });
     }
 };
@@ -491,38 +563,42 @@ const deleteDataset = async (req, res) => {
 const fetchApiData = async (req, res) => {
     try {
         const { api_config_id, dataset_name, description } = req.body;
-        
+
         console.log('Fetching API data - Request:', { api_config_id, dataset_name });
-        
+
         if (!api_config_id || !dataset_name) {
             return res.status(400).json({
                 success: false,
                 message: 'API configuration ID and dataset name are required'
             });
         }
-        
+
         // Get API configuration
         const [configs] = await pool.query(
             'SELECT * FROM api_configurations WHERE id = ? AND is_active = TRUE',
             [api_config_id]
         );
-        
+
         if (configs.length === 0) {
             console.error('API configuration not found or inactive:', api_config_id);
-            return res.status(404).json({ 
-                success: false, 
-                message: 'API configuration not found or inactive' 
+            return res.status(404).json({
+                success: false,
+                message: 'API configuration not found or inactive'
             });
         }
-        
+
         const apiConfig = configs[0];
         console.log('API Config found:', { id: apiConfig.id, name: apiConfig.name, base_url: apiConfig.base_url });
-        
+
         const axios = require('axios');
-        
+
+        // Extract method and timeout from config
+        const requestMethod = (apiConfig.method || 'GET').trim().toUpperCase();
+        const requestTimeout = apiConfig.timeout_ms || 30000;
+
         // Build request - use EXACT values from config (NO normalization)
         const url = `${apiConfig.base_url}${apiConfig.endpoint || ''}`;
-        
+
         // Parse headers - use EXACTLY what user configured
         let headers = {};
         if (apiConfig.headers) {
@@ -541,9 +617,9 @@ const fetchApiData = async (req, res) => {
                 headers = {};
             }
         }
-        
+
         // NO auto-added headers (like Content-Type)
-        
+
         // Add authentication - use EXACT values from config
         if (apiConfig.auth_type !== 'none' && apiConfig.auth_config) {
             try {
@@ -559,7 +635,7 @@ const fetchApiData = async (req, res) => {
                 } else {
                     authConfig = {};
                 }
-                
+
                 // Use EXACT header name - NO defaults
                 if (authConfig && typeof authConfig === 'object') {
                     if (apiConfig.auth_type === 'bearer' && authConfig.token) {
@@ -586,15 +662,15 @@ const fetchApiData = async (req, res) => {
                 });
             }
         }
-        
+
         // Make API request - use EXACT config values (NO defaults)
-        console.log('Making API request (EXACT config values, NO defaults):', { 
-            method: requestMethod, 
-            url, 
+        console.log('Making API request (EXACT config values, NO defaults):', {
+            method: requestMethod,
+            url,
             headers: Object.keys(headers),
             timeout: requestTimeout
         });
-        
+
         const response = await axios({
             method: requestMethod,
             url: url,
@@ -602,7 +678,7 @@ const fetchApiData = async (req, res) => {
             timeout: requestTimeout,
             validateStatus: () => true // Return exact status - don't throw
         });
-        
+
         // Return EXACT error from external API - no masking
         if (response.status === 401) {
             console.error('External API returned 401 Unauthorized:', {
@@ -626,7 +702,7 @@ const fetchApiData = async (req, res) => {
                 }
             });
         }
-        
+
         if (response.status === 404) {
             console.error('External API returned 404 Not Found:', {
                 url,
@@ -645,7 +721,7 @@ const fetchApiData = async (req, res) => {
                 }
             });
         }
-        
+
         if (response.status >= 400) {
             console.error('External API returned error:', {
                 status: response.status,
@@ -665,11 +741,11 @@ const fetchApiData = async (req, res) => {
                 }
             });
         }
-        
+
         console.log('API response received:', { status: response.status, dataLength: Array.isArray(response.data) ? response.data.length : 'not array' });
-        
+
         let data = response.data;
-        
+
         // Handle array response
         if (!Array.isArray(data)) {
             if (data.data && Array.isArray(data.data)) {
@@ -681,14 +757,14 @@ const fetchApiData = async (req, res) => {
                 data = [data];
             }
         }
-        
+
         if (data.length === 0) {
-            return res.status(400).json({ 
-                success: false, 
-                message: 'API returned no data' 
+            return res.status(400).json({
+                success: false,
+                message: 'API returned no data'
             });
         }
-        
+
         // Infer schema from first row
         const columns = Object.keys(data[0]);
         const schemaDefinition = columns.map(col => {
@@ -703,7 +779,7 @@ const fetchApiData = async (req, res) => {
             }
             return { name: col, type: type };
         });
-        
+
         // Only save the API configuration reference, NOT the actual data
         // Check if dataset already exists for this API config
         // Handle both JSON string and JSON object types
@@ -714,7 +790,7 @@ const fetchApiData = async (req, res) => {
              AND CAST(JSON_EXTRACT(COALESCE(source_config, '{}'), '$.api_config_id') AS UNSIGNED) = ?`,
             [apiConfig.id]
         );
-        
+
         let datasetId;
         if (existing.length > 0) {
             // Update existing dataset metadata
@@ -751,7 +827,7 @@ const fetchApiData = async (req, res) => {
             datasetId = datasetResult.insertId;
             console.log('Dataset created with ID:', datasetId);
         }
-        
+
         // Fetch created/updated dataset
         const [datasets] = await pool.query(
             `SELECT d.*, u.email as created_by_email
@@ -760,7 +836,7 @@ const fetchApiData = async (req, res) => {
              WHERE d.id = ?`,
             [datasetId]
         );
-        
+
         if (datasets.length === 0) {
             return res.status(500).json({
                 success: false,
@@ -780,10 +856,10 @@ const fetchApiData = async (req, res) => {
     } catch (error) {
         console.error('Fetch API data error:', error);
         console.error('Error stack:', error.stack);
-        
+
         // Provide more helpful error messages
         let errorMessage = 'Error fetching data from API';
-        
+
         if (error.message && error.message.includes('not valid JSON')) {
             errorMessage = 'Invalid JSON configuration in API settings. Please check your API configuration in Admin Panel.';
         } else if (error.response) {
@@ -792,9 +868,9 @@ const fetchApiData = async (req, res) => {
         } else if (error.message) {
             errorMessage = error.message;
         }
-        
-        res.status(500).json({ 
-            success: false, 
+
+        res.status(500).json({
+            success: false,
             message: errorMessage
         });
     }
@@ -806,22 +882,22 @@ const fetchApiData = async (req, res) => {
 const refreshApiDataset = async (req, res) => {
     try {
         const { id } = req.params;
-        
+
         // Get dataset
         const [datasets] = await pool.query(
             'SELECT * FROM datasets WHERE id = ?',
             [id]
         );
-        
+
         if (datasets.length === 0) {
             return res.status(404).json({
                 success: false,
                 message: 'Dataset not found'
             });
         }
-        
+
         const dataset = datasets[0];
-        
+
         // Only refresh API datasets
         if (dataset.source_type !== 'api') {
             return res.status(400).json({
@@ -829,7 +905,7 @@ const refreshApiDataset = async (req, res) => {
                 message: 'Only API datasets can be refreshed'
             });
         }
-        
+
         // Extract api_config_id from source_config
         let sourceConfig;
         try {
@@ -842,20 +918,20 @@ const refreshApiDataset = async (req, res) => {
                 message: 'Invalid source configuration'
             });
         }
-        
+
         if (!sourceConfig.api_config_id) {
             return res.status(400).json({
                 success: false,
                 message: 'API configuration ID not found in dataset'
             });
         }
-        
+
         // Get API configuration
         const [apiConfigs] = await pool.query(
             'SELECT * FROM api_configurations WHERE id = ? AND is_active = TRUE',
             [sourceConfig.api_config_id]
         );
-        
+
         if (apiConfigs.length === 0) {
             return res.status(404).json({
                 success: false,
@@ -863,13 +939,13 @@ const refreshApiDataset = async (req, res) => {
                 status: 'disconnected'
             });
         }
-        
+
         const apiConfig = apiConfigs[0];
         const axios = require('axios');
-        
+
         // Build request - use EXACT values (NO normalization)
         const url = `${apiConfig.base_url}${apiConfig.endpoint || ''}`;
-        
+
         // Parse headers - use EXACTLY what user configured
         let headers = {};
         if (apiConfig.headers) {
@@ -888,9 +964,9 @@ const refreshApiDataset = async (req, res) => {
                 headers = {};
             }
         }
-        
+
         // NO auto-added headers
-        
+
         // Add authentication - use EXACT values (NO defaults)
         if (apiConfig.auth_type !== 'none' && apiConfig.auth_config) {
             try {
@@ -906,7 +982,7 @@ const refreshApiDataset = async (req, res) => {
                 } else {
                     authConfig = {};
                 }
-                
+
                 // Use EXACT header name - require it for API key
                 if (authConfig && typeof authConfig === 'object') {
                     if (apiConfig.auth_type === 'bearer' && authConfig.token) {
@@ -940,7 +1016,7 @@ const refreshApiDataset = async (req, res) => {
                 });
             }
         }
-        
+
         // Use EXACT method from config - NO default fallback
         if (!apiConfig.method || apiConfig.method.trim() === '') {
             return res.json({
@@ -953,7 +1029,7 @@ const refreshApiDataset = async (req, res) => {
             });
         }
         const requestMethod = apiConfig.method.trim().toUpperCase();
-        
+
         // Use EXACT timeout from config - NO default fallback
         if (!apiConfig.timeout_ms || apiConfig.timeout_ms <= 0) {
             return res.json({
@@ -966,20 +1042,20 @@ const refreshApiDataset = async (req, res) => {
             });
         }
         const requestTimeout = apiConfig.timeout_ms;
-        
+
         // Make API request to test connection and get data - use EXACT values (NO defaults)
         let data = [];
         let rowCount = 0;
         let errorMessage = null;
-        
-        console.log('Refreshing API dataset - Making request (EXACT values, NO defaults):', { 
-            method: requestMethod, 
-            url, 
+
+        console.log('Refreshing API dataset - Making request (EXACT values, NO defaults):', {
+            method: requestMethod,
+            url,
             headers: Object.keys(headers),
             timeout: requestTimeout,
             hasAuth: !!headers['Authorization'] || Object.keys(headers).some(k => k.toLowerCase().includes('api') || k.toLowerCase().includes('key'))
         });
-        
+
         try {
             const response = await axios({
                 method: requestMethod,
@@ -988,12 +1064,12 @@ const refreshApiDataset = async (req, res) => {
                 timeout: requestTimeout,
                 validateStatus: () => true // Don't throw on any status
             });
-            
-            console.log('Refresh API response:', { 
-                status: response.status, 
-                statusText: response.statusText 
+
+            console.log('Refresh API response:', {
+                status: response.status,
+                statusText: response.statusText
             });
-            
+
             // Check for authentication errors from external API
             if (response.status === 401) {
                 errorMessage = 'External API returned 401 Unauthorized. Please verify your API credentials (token, API key, or username/password) are correct in the configuration.';
@@ -1008,7 +1084,7 @@ const refreshApiDataset = async (req, res) => {
                 console.error('External API error:', { status: response.status, statusText: response.statusText });
                 throw new Error(errorMessage);
             }
-            
+
             // Only process data if response is successful (2xx)
             // Handle response data
             let responseData = response.data;
@@ -1021,17 +1097,20 @@ const refreshApiDataset = async (req, res) => {
                     responseData = [responseData];
                 }
             }
-            
+
             data = Array.isArray(responseData) ? responseData : [];
             rowCount = data.length;
-            
+
+            // Clear cache for this dataset since we're refreshing
+            clearCache(id);
+
             // Update dataset row_count, connection_status, and updated_at
             // Clear last_error on successful refresh
             await pool.query(
                 'UPDATE datasets SET row_count = ?, connection_status = ?, last_error = NULL, updated_at = NOW() WHERE id = ?',
                 [rowCount, 'connected', id]
             );
-            
+
             res.json({
                 success: true,
                 message: 'Dataset refreshed successfully',
@@ -1043,7 +1122,7 @@ const refreshApiDataset = async (req, res) => {
             });
         } catch (error) {
             console.error('API refresh error:', error);
-            
+
             // Determine error message
             if (error.response) {
                 if (error.response.status === 401) {
@@ -1064,13 +1143,13 @@ const refreshApiDataset = async (req, res) => {
             } else {
                 errorMessage = 'Failed to connect to API';
             }
-            
+
             // Update dataset to reflect error - save connection_status and last_error to database
             await pool.query(
                 'UPDATE datasets SET connection_status = ?, last_error = ?, updated_at = NOW() WHERE id = ?',
                 ['error', errorMessage, id]
             );
-            
+
             res.json({
                 success: false,
                 message: errorMessage,
@@ -1097,33 +1176,33 @@ const updateDataset = async (req, res) => {
     try {
         const { id } = req.params;
         const { name, description } = req.body;
-        
+
         if (!name) {
             return res.status(400).json({
                 success: false,
                 message: 'Dataset name is required'
             });
         }
-        
+
         // Check if dataset exists
         const [datasets] = await pool.query(
             'SELECT * FROM datasets WHERE id = ?',
             [id]
         );
-        
+
         if (datasets.length === 0) {
             return res.status(404).json({
                 success: false,
                 message: 'Dataset not found'
             });
         }
-        
+
         // Update dataset (only name and description - developers can't change source config)
         await pool.query(
             'UPDATE datasets SET name = ?, description = ?, updated_at = CURRENT_TIMESTAMP WHERE id = ?',
             [name, description || null, id]
         );
-        
+
         // Fetch updated dataset
         const [updated] = await pool.query(
             `SELECT d.*, u.email as created_by_email
@@ -1132,7 +1211,7 @@ const updateDataset = async (req, res) => {
              WHERE d.id = ?`,
             [id]
         );
-        
+
         res.json({
             success: true,
             message: 'Dataset updated successfully',
@@ -1184,14 +1263,14 @@ const getUsedApiConfigs = async (req, res) => {
                       ac.timeout_ms, ac.created_by, ac.created_at, ac.updated_at, u.email
              ORDER BY last_used_at DESC`
         );
-        
+
         // Mask sensitive auth data
         const safeConfigs = configs.map(config => {
             const safe = { ...config };
             if (safe.auth_config) {
                 try {
-                    const authConfig = typeof safe.auth_config === 'string' 
-                        ? JSON.parse(safe.auth_config) 
+                    const authConfig = typeof safe.auth_config === 'string'
+                        ? JSON.parse(safe.auth_config)
                         : safe.auth_config;
                     // Mask tokens/keys
                     if (authConfig.token) authConfig.token = '***masked***';
@@ -1203,11 +1282,37 @@ const getUsedApiConfigs = async (req, res) => {
             }
             return safe;
         });
-        
+
         res.json({ success: true, data: safeConfigs });
     } catch (error) {
         console.error('Get used API configs error:', error);
         res.status(500).json({ success: false, message: 'Error fetching used API configurations' });
+    }
+};
+
+/**
+ * Clear data cache for a specific dataset or all datasets
+ */
+const clearDataCache = async (req, res) => {
+    try {
+        const { id } = req.params;
+
+        if (id) {
+            clearCache(id);
+            res.json({
+                success: true,
+                message: `Cache cleared for dataset ${id}`
+            });
+        } else {
+            clearCache(null);
+            res.json({
+                success: true,
+                message: 'All dataset caches cleared'
+            });
+        }
+    } catch (error) {
+        console.error('Clear cache error:', error);
+        res.status(500).json({ success: false, message: 'Error clearing cache' });
     }
 };
 
@@ -1219,5 +1324,6 @@ module.exports = {
     updateDataset,
     fetchApiData,
     refreshApiDataset,
-    getUsedApiConfigs
+    getUsedApiConfigs,
+    clearDataCache
 };

@@ -8,6 +8,8 @@ import {
   X,
 } from 'lucide-react';
 import { apiGet, apiPost } from '../../lib/api';
+import { useTheme } from '../../contexts/ThemeContext';
+import { getThemeColors, getColorPalette } from '../../lib/themeColors';
 
 interface Dashboard {
   id: number;
@@ -52,6 +54,10 @@ const FEATURES = [
 ];
 
 export default function AccessControl() {
+  const { isDark } = useTheme();
+  const colors = getThemeColors(isDark);
+  const palette = getColorPalette(isDark);
+
   const [dashboards, setDashboards] = useState<Dashboard[]>([]);
   const [users, setUsers] = useState<User[]>([]);
   const [loading, setLoading] = useState(true);
@@ -143,9 +149,9 @@ export default function AccessControl() {
         setAssignModal((m) =>
           m
             ? {
-                ...m,
-                assignments: Array.isArray(list) ? list : m.assignments,
-              }
+              ...m,
+              assignments: Array.isArray(list) ? list : m.assignments,
+            }
             : null
         );
         setAssignUserId('');
@@ -163,69 +169,69 @@ export default function AccessControl() {
   const viewerUsers = users.filter((u) => u.role_name === 'viewer');
 
   return (
-    <div className="space-y-6">
+    <div style={{ display: 'flex', flexDirection: 'column', gap: '1.5rem' }}>
       <div>
-        <h2 className="text-2xl font-semibold text-gray-900 mb-1">
+        <h2 style={{ fontSize: '1.5rem', fontWeight: 600, color: colors.text, marginBottom: '0.25rem' }}>
           Access Control & Permissions
         </h2>
-        <p className="text-gray-600">
+        <p style={{ color: colors.muted }}>
           Assign dashboards to users. Admins and developers see all dashboards; viewers only see
           assigned ones.
         </p>
       </div>
 
       {error && (
-        <div className="p-4 rounded-lg bg-red-50 text-red-700 text-sm">{error}</div>
+        <div style={{ padding: '1rem', borderRadius: '0.5rem', backgroundColor: palette.red.bg, color: palette.red.text, fontSize: '0.875rem' }}>{error}</div>
       )}
 
       {/* Dashboard Access */}
-      <div className="bg-white rounded-xl shadow-sm border border-gray-200">
-        <div className="px-6 py-4 border-b border-gray-200">
-          <div className="flex items-center">
-            <Shield className="w-5 h-5 text-red-600 mr-2" />
-            <h3 className="font-semibold text-gray-900">Dashboard Assignments</h3>
+      <div style={{ backgroundColor: colors.cardBg, borderRadius: '0.75rem', boxShadow: colors.cardShadow, border: `1px solid ${colors.cardBorder}` }}>
+        <div style={{ padding: '1rem 1.5rem', borderBottom: `1px solid ${colors.cardBorder}` }}>
+          <div style={{ display: 'flex', alignItems: 'center' }}>
+            <Shield style={{ width: '1.25rem', height: '1.25rem', color: '#dc2626', marginRight: '0.5rem' }} />
+            <h3 style={{ fontWeight: 600, color: colors.text }}>Dashboard Assignments</h3>
           </div>
         </div>
         {loading ? (
-          <div className="p-12 flex justify-center">
+          <div style={{ padding: '3rem', display: 'flex', justifyContent: 'center' }}>
             <Loader2 className="w-8 h-8 text-red-500 animate-spin" />
           </div>
         ) : (
-          <div className="overflow-x-auto">
-            <table className="w-full">
-              <thead className="bg-gray-50 border-b border-gray-200">
+          <div style={{ overflowX: 'auto' }}>
+            <table style={{ width: '100%', borderCollapse: 'collapse' }}>
+              <thead style={{ backgroundColor: colors.tableBg, borderBottom: `1px solid ${colors.cardBorder}` }}>
                 <tr>
-                  <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                  <th style={{ padding: '0.75rem 1.5rem', textAlign: 'left', fontSize: '0.75rem', fontWeight: 500, color: colors.muted, textTransform: 'uppercase', letterSpacing: '0.05em' }}>
                     Dashboard
                   </th>
-                  <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                  <th style={{ padding: '0.75rem 1.5rem', textAlign: 'left', fontSize: '0.75rem', fontWeight: 500, color: colors.muted, textTransform: 'uppercase', letterSpacing: '0.05em' }}>
                     Assignments
                   </th>
-                  <th className="px-6 py-3 text-right text-xs font-medium text-gray-500 uppercase tracking-wider">
+                  <th style={{ padding: '0.75rem 1.5rem', textAlign: 'right', fontSize: '0.75rem', fontWeight: 500, color: colors.muted, textTransform: 'uppercase', letterSpacing: '0.05em' }}>
                     Actions
                   </th>
                 </tr>
               </thead>
-              <tbody className="divide-y divide-gray-200">
-                {dashboards.map((d) => (
-                  <tr key={d.id} className="hover:bg-gray-50">
-                    <td className="px-6 py-4">
-                      <span className="font-medium text-gray-900">{d.name}</span>
+              <tbody>
+                {dashboards.map((d, index) => (
+                  <tr key={d.id} style={{ borderBottom: index < dashboards.length - 1 ? `1px solid ${colors.cardBorder}` : 'none' }}>
+                    <td style={{ padding: '1rem 1.5rem' }}>
+                      <span style={{ fontWeight: 500, color: colors.text }}>{d.name}</span>
                       {d.description && (
-                        <p className="text-sm text-gray-500 mt-0.5 line-clamp-1">
+                        <p style={{ fontSize: '0.875rem', color: colors.muted, marginTop: '0.125rem' }}>
                           {d.description}
                         </p>
                       )}
                     </td>
-                    <td className="px-6 py-4 text-sm text-gray-600">
+                    <td style={{ padding: '1rem 1.5rem', fontSize: '0.875rem', color: colors.muted }}>
                       {d.assignment_count != null ? d.assignment_count : '—'} user(s)
                     </td>
-                    <td className="px-6 py-4 text-right">
+                    <td style={{ padding: '1rem 1.5rem', textAlign: 'right' }}>
                       <button
                         onClick={() => openAssignModal(d)}
-                        className="inline-flex items-center px-3 py-1.5 text-sm text-red-600 hover:bg-red-50 rounded-lg transition-colors"
+                        style={{ display: 'inline-flex', alignItems: 'center', padding: '0.375rem 0.75rem', fontSize: '0.875rem', color: '#dc2626', backgroundColor: 'transparent', border: 'none', borderRadius: '0.5rem', cursor: 'pointer', transition: 'background-color 0.2s' }}
                       >
-                        <UserPlus className="w-4 h-4 mr-1" />
+                        <UserPlus style={{ width: '1rem', height: '1rem', marginRight: '0.25rem' }} />
                         Assign
                       </button>
                     </td>
@@ -236,70 +242,91 @@ export default function AccessControl() {
           </div>
         )}
         {!loading && dashboards.length === 0 && (
-          <div className="p-12 text-center text-gray-500">
+          <div style={{ padding: '3rem', textAlign: 'center', color: colors.muted }}>
             No dashboards yet. Create them from the Developer portal.
           </div>
         )}
       </div>
 
       {/* Feature Permissions (informational) */}
-      <div className="bg-white rounded-xl shadow-sm border border-gray-200">
-        <div className="px-6 py-4 border-b border-gray-200">
-          <div className="flex items-center">
-            <Shield className="w-5 h-5 text-red-600 mr-2" />
-            <h3 className="font-semibold text-gray-900">Feature Permissions by Role</h3>
+      <div style={{ backgroundColor: colors.cardBg, borderRadius: '0.75rem', boxShadow: colors.cardShadow, border: `1px solid ${colors.cardBorder}` }}>
+        <div style={{ padding: '1rem 1.5rem', borderBottom: `1px solid ${colors.cardBorder}` }}>
+          <div style={{ display: 'flex', alignItems: 'center' }}>
+            <Shield style={{ width: '1.25rem', height: '1.25rem', color: '#dc2626', marginRight: '0.5rem' }} />
+            <h3 style={{ fontWeight: 600, color: colors.text }}>Feature Permissions by Role</h3>
           </div>
-          <p className="text-sm text-gray-500 mt-1">
+          <p style={{ fontSize: '0.875rem', color: colors.muted, marginTop: '0.25rem' }}>
             Managed by system RBAC. Admins and developers have full dashboard access.
           </p>
         </div>
-        <div className="overflow-x-auto">
-          <table className="w-full">
-            <thead className="bg-gray-50 border-b border-gray-200">
+        <div style={{ overflowX: 'auto' }}>
+          <table style={{ width: '100%', borderCollapse: 'collapse' }}>
+            <thead style={{ backgroundColor: colors.tableBg, borderBottom: `1px solid ${colors.cardBorder}` }}>
               <tr>
-                <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                <th style={{ padding: '0.75rem 1.5rem', textAlign: 'left', fontSize: '0.75rem', fontWeight: 500, color: colors.muted, textTransform: 'uppercase', letterSpacing: '0.05em' }}>
                   Feature
                 </th>
-                <th className="px-6 py-3 text-center text-xs font-medium text-gray-500 uppercase tracking-wider">
+                <th style={{ padding: '0.75rem 1.5rem', textAlign: 'center', fontSize: '0.75rem', fontWeight: 500, color: colors.muted, textTransform: 'uppercase', letterSpacing: '0.05em' }}>
                   Admin
                 </th>
-                <th className="px-6 py-3 text-center text-xs font-medium text-gray-500 uppercase tracking-wider">
+                <th style={{ padding: '0.75rem 1.5rem', textAlign: 'center', fontSize: '0.75rem', fontWeight: 500, color: colors.muted, textTransform: 'uppercase', letterSpacing: '0.05em' }}>
                   Developer
                 </th>
-                <th className="px-6 py-3 text-center text-xs font-medium text-gray-500 uppercase tracking-wider">
+                <th style={{ padding: '0.75rem 1.5rem', textAlign: 'center', fontSize: '0.75rem', fontWeight: 500, color: colors.muted, textTransform: 'uppercase', letterSpacing: '0.05em' }}>
                   Viewer
                 </th>
               </tr>
             </thead>
-            <tbody className="divide-y divide-gray-200">
-              {FEATURES.map((f) => (
-                <tr key={f.id} className="hover:bg-gray-50">
-                  <td className="px-6 py-4">
-                    <span className="font-medium text-gray-900">{f.name}</span>
+            <tbody>
+              {FEATURES.map((f, index) => (
+                <tr key={f.id} style={{ borderBottom: index < FEATURES.length - 1 ? `1px solid ${colors.cardBorder}` : 'none' }}>
+                  <td style={{ padding: '1rem 1.5rem' }}>
+                    <span style={{ fontWeight: 500, color: colors.text }}>{f.name}</span>
                   </td>
-                  <td className="px-6 py-4 text-center">
+                  <td style={{ padding: '1rem 1.5rem', textAlign: 'center' }}>
                     <span
-                      className={`inline-flex items-center justify-center w-10 h-10 rounded-lg ${
-                        f.admin ? 'bg-green-100 text-green-600' : 'bg-gray-100 text-gray-400'
-                      }`}
+                      style={{
+                        display: 'inline-flex',
+                        alignItems: 'center',
+                        justifyContent: 'center',
+                        width: '2.5rem',
+                        height: '2.5rem',
+                        borderRadius: '0.5rem',
+                        backgroundColor: f.admin ? palette.green.bg : palette.gray.bg,
+                        color: f.admin ? palette.green.text : colors.muted
+                      }}
                     >
                       {f.admin ? <Unlock className="w-5 h-5" /> : <Lock className="w-5 h-5" />}
                     </span>
                   </td>
-                  <td className="px-6 py-4 text-center">
+                  <td style={{ padding: '1rem 1.5rem', textAlign: 'center' }}>
                     <span
-                      className={`inline-flex items-center justify-center w-10 h-10 rounded-lg ${
-                        f.developer ? 'bg-green-100 text-green-600' : 'bg-gray-100 text-gray-400'
-                      }`}
+                      style={{
+                        display: 'inline-flex',
+                        alignItems: 'center',
+                        justifyContent: 'center',
+                        width: '2.5rem',
+                        height: '2.5rem',
+                        borderRadius: '0.5rem',
+                        backgroundColor: f.developer ? palette.green.bg : palette.gray.bg,
+                        color: f.developer ? palette.green.text : colors.muted
+                      }}
                     >
                       {f.developer ? <Unlock className="w-5 h-5" /> : <Lock className="w-5 h-5" />}
                     </span>
                   </td>
-                  <td className="px-6 py-4 text-center">
+                  <td style={{ padding: '1rem 1.5rem', textAlign: 'center' }}>
                     <span
-                      className={`inline-flex items-center justify-center w-10 h-10 rounded-lg ${
-                        f.viewer ? 'bg-green-100 text-green-600' : 'bg-gray-100 text-gray-400'
-                      }`}
+                      style={{
+                        display: 'inline-flex',
+                        alignItems: 'center',
+                        justifyContent: 'center',
+                        width: '2.5rem',
+                        height: '2.5rem',
+                        borderRadius: '0.5rem',
+                        backgroundColor: f.viewer ? palette.green.bg : palette.gray.bg,
+                        color: f.viewer ? palette.green.text : colors.muted
+                      }}
                     >
                       {f.viewer ? <Unlock className="w-5 h-5" /> : <Lock className="w-5 h-5" />}
                     </span>
@@ -313,34 +340,34 @@ export default function AccessControl() {
 
       {/* Assign Modal */}
       {assignModal && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 p-4">
-          <div className="bg-white rounded-xl shadow-xl w-full max-w-lg max-h-[90vh] overflow-hidden flex flex-col">
-            <div className="flex items-center justify-between px-6 py-4 border-b border-gray-200">
-              <h3 className="text-lg font-semibold text-gray-900">
+        <div style={{ position: 'fixed', inset: 0, zIndex: 50, display: 'flex', alignItems: 'center', justifyContent: 'center', backgroundColor: 'rgba(0,0,0,0.5)', padding: '1rem' }}>
+          <div style={{ backgroundColor: colors.cardBg, borderRadius: '0.75rem', boxShadow: '0 25px 50px -12px rgba(0, 0, 0, 0.25)', width: '100%', maxWidth: '32rem', maxHeight: '90vh', overflow: 'hidden', display: 'flex', flexDirection: 'column' }}>
+            <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', padding: '1rem 1.5rem', borderBottom: `1px solid ${colors.cardBorder}` }}>
+              <h3 style={{ fontSize: '1.125rem', fontWeight: 600, color: colors.text }}>
                 Assign: {assignModal.dashboardName}
               </h3>
               <button
                 onClick={closeAssignModal}
-                className="p-1 text-gray-400 hover:text-gray-600 rounded"
+                style={{ padding: '0.25rem', color: colors.muted, backgroundColor: 'transparent', border: 'none', borderRadius: '0.25rem', cursor: 'pointer' }}
               >
                 <X className="w-5 h-5" />
               </button>
             </div>
-            <div className="flex-1 overflow-y-auto p-6 space-y-4">
+            <div style={{ flex: 1, overflowY: 'auto', padding: '1.5rem', display: 'flex', flexDirection: 'column', gap: '1rem' }}>
               {assignError && (
-                <div className="p-3 rounded-lg bg-red-50 text-red-700 text-sm">
+                <div style={{ padding: '0.75rem', borderRadius: '0.5rem', backgroundColor: palette.red.bg, color: palette.red.text, fontSize: '0.875rem' }}>
                   {assignError}
                 </div>
               )}
-              <form onSubmit={handleAssign} className="space-y-4">
+              <form onSubmit={handleAssign} style={{ display: 'flex', flexDirection: 'column', gap: '1rem' }}>
                 <div>
-                  <label className="block text-sm font-medium text-gray-700 mb-1">User</label>
+                  <label style={{ display: 'block', fontSize: '0.875rem', fontWeight: 500, color: colors.text, marginBottom: '0.25rem' }}>User</label>
                   <select
                     value={assignUserId}
                     onChange={(e) =>
                       setAssignUserId(e.target.value === '' ? '' : Number(e.target.value))
                     }
-                    className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-red-500 outline-none"
+                    style={{ width: '100%', padding: '0.5rem 0.75rem', border: `1px solid ${colors.inputBorder}`, borderRadius: '0.5rem', outline: 'none', backgroundColor: colors.inputBg, color: colors.text }}
                   >
                     <option value="">Select user...</option>
                     {viewerUsers.map((u) => (
@@ -356,7 +383,7 @@ export default function AccessControl() {
                   </select>
                 </div>
                 <div>
-                  <label className="block text-sm font-medium text-gray-700 mb-1">
+                  <label style={{ display: 'block', fontSize: '0.875rem', fontWeight: 500, color: colors.text, marginBottom: '0.25rem' }}>
                     Permission
                   </label>
                   <select
@@ -364,7 +391,7 @@ export default function AccessControl() {
                     onChange={(e) =>
                       setAssignPermission(e.target.value as 'view' | 'edit')
                     }
-                    className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-red-500 outline-none"
+                    style={{ width: '100%', padding: '0.5rem 0.75rem', border: `1px solid ${colors.inputBorder}`, borderRadius: '0.5rem', outline: 'none', backgroundColor: colors.inputBg, color: colors.text }}
                   >
                     <option value="view">View</option>
                     <option value="edit">Edit</option>
@@ -373,24 +400,24 @@ export default function AccessControl() {
                 <button
                   type="submit"
                   disabled={assignUserId === '' || assignSubmitting}
-                  className="w-full py-2 bg-red-600 text-white rounded-lg hover:bg-red-700 disabled:opacity-50 flex items-center justify-center gap-2"
+                  style={{ width: '100%', padding: '0.5rem', backgroundColor: '#dc2626', color: 'white', borderRadius: '0.5rem', border: 'none', cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '0.5rem', opacity: (assignUserId === '' || assignSubmitting) ? 0.5 : 1 }}
                 >
                   {assignSubmitting && <Loader2 className="w-4 h-4 animate-spin" />}
                   Assign
                 </button>
               </form>
               <div>
-                <h4 className="text-sm font-medium text-gray-900 mb-2">Current assignments</h4>
+                <h4 style={{ fontSize: '0.875rem', fontWeight: 500, color: colors.text, marginBottom: '0.5rem' }}>Current assignments</h4>
                 {assignModal.assignments.length === 0 ? (
-                  <p className="text-sm text-gray-500">None</p>
+                  <p style={{ fontSize: '0.875rem', color: colors.muted }}>None</p>
                 ) : (
-                  <ul className="text-sm space-y-1">
+                  <ul style={{ fontSize: '0.875rem', display: 'flex', flexDirection: 'column', gap: '0.25rem' }}>
                     {assignModal.assignments.map((a) => (
-                      <li key={a.id} className="flex items-center justify-between">
+                      <li key={a.id} style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', color: colors.text }}>
                         <span>
                           {a.first_name} {a.last_name} ({a.user_email})
                         </span>
-                        <span className="text-gray-500">{a.permission_type}</span>
+                        <span style={{ color: colors.muted }}>{a.permission_type}</span>
                       </li>
                     ))}
                   </ul>

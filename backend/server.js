@@ -48,6 +48,7 @@ app.use('/api/auth', require('./routes/auth'));
 app.use('/api/users', require('./routes/users'));
 app.use('/api/dashboards', require('./routes/dashboards'));
 app.use('/api/data', require('./routes/data'));
+app.use('/api/charts', require('./routes/charts'));
 app.use('/api/admin', require('./routes/admin'));
 
 // Socket.IO authentication and real-time updates
@@ -56,7 +57,7 @@ io.use((socket, next) => {
     if (!token) {
         return next(new Error('Authentication error'));
     }
-    
+
     const jwt = require('jsonwebtoken');
     try {
         const decoded = jwt.verify(
@@ -74,25 +75,25 @@ io.use((socket, next) => {
 // Socket.IO connection handling
 io.on('connection', (socket) => {
     console.log(`User connected: ${socket.userId}`);
-    
+
     // Join user-specific room
     socket.join(`user:${socket.userId}`);
-    
+
     // Join role-specific room
     socket.join(`role:${socket.userRole}`);
-    
+
     // Subscribe to dashboard updates
     socket.on('subscribe:dashboard', (dashboardId) => {
         socket.join(`dashboard:${dashboardId}`);
         console.log(`User ${socket.userId} subscribed to dashboard ${dashboardId}`);
     });
-    
+
     // Unsubscribe from dashboard updates
     socket.on('unsubscribe:dashboard', (dashboardId) => {
         socket.leave(`dashboard:${dashboardId}`);
         console.log(`User ${socket.userId} unsubscribed from dashboard ${dashboardId}`);
     });
-    
+
     socket.on('disconnect', () => {
         console.log(`User disconnected: ${socket.userId}`);
     });

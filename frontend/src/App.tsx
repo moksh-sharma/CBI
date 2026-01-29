@@ -7,6 +7,7 @@ import DeveloperDashboard from './components/developer/DeveloperDashboard';
 import ViewerLogin from './components/viewer/ViewerLogin';
 import ViewerDashboard from './components/viewer/ViewerDashboard';
 import LandingPage from './components/LandingPage';
+import UnifiedLogin from './components/shared/UnifiedLogin';
 
 function RoleRedirect({ role }: { role: string }) {
   if (role === 'admin') return <Navigate to="/admin/dashboard" replace />;
@@ -31,22 +32,28 @@ function App() {
       <Routes>
         <Route path="/" element={<LandingPage />} />
 
+        {/* Unified Login - redirects based on role */}
+        <Route
+          path="/login"
+          element={
+            user ? (
+              <RoleRedirect role={user.role_name} />
+            ) : (
+              <UnifiedLogin />
+            )
+          }
+        />
+
         {/* Admin */}
         <Route
           path="/admin/login"
-          element={
-            user?.role_name === 'admin' ? (
-              <Navigate to="/admin/dashboard" replace />
-            ) : (
-              <AdminLogin />
-            )
-          }
+          element={<Navigate to="/login" replace />}
         />
         <Route
           path="/admin/*"
           element={
             !user ? (
-              <Navigate to="/admin/login" replace />
+              <Navigate to="/login" replace />
             ) : user.role_name !== 'admin' ? (
               <RoleRedirect role={user.role_name} />
             ) : (
@@ -58,19 +65,13 @@ function App() {
         {/* Developer */}
         <Route
           path="/developer/login"
-          element={
-            user?.role_name === 'developer' ? (
-              <Navigate to="/developer/dashboard" replace />
-            ) : (
-              <DeveloperLogin />
-            )
-          }
+          element={<Navigate to="/login" replace />}
         />
         <Route
           path="/developer/*"
           element={
             !user ? (
-              <Navigate to="/developer/login" replace />
+              <Navigate to="/login" replace />
             ) : user.role_name !== 'developer' ? (
               <RoleRedirect role={user.role_name} />
             ) : (
@@ -82,19 +83,13 @@ function App() {
         {/* Viewer */}
         <Route
           path="/viewer/login"
-          element={
-            user?.role_name === 'viewer' ? (
-              <Navigate to="/viewer/dashboard" replace />
-            ) : (
-              <ViewerLogin />
-            )
-          }
+          element={<Navigate to="/login" replace />}
         />
         <Route
           path="/viewer/*"
           element={
             !user ? (
-              <Navigate to="/viewer/login" replace />
+              <Navigate to="/login" replace />
             ) : user.role_name !== 'viewer' ? (
               <RoleRedirect role={user.role_name} />
             ) : (

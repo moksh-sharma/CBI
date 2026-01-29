@@ -10,6 +10,8 @@ import {
   Loader2,
 } from 'lucide-react';
 import { apiGet } from '../../lib/api';
+import { useTheme } from '../../contexts/ThemeContext';
+import { getThemeColors, getColorPalette } from '../../lib/themeColors';
 
 interface Dashboard {
   id: number;
@@ -31,6 +33,11 @@ export default function ViewerHome() {
   const [error, setError] = useState<string | null>(null);
   const [searchTerm, setSearchTerm] = useState('');
   const [favorites, setFavorites] = useState<string[]>([]);
+
+  // Theme support
+  const { isDark } = useTheme();
+  const colors = getThemeColors(isDark);
+  const palette = getColorPalette(isDark);
 
   const fetchDashboards = useCallback(async () => {
     setLoading(true);
@@ -89,71 +96,107 @@ export default function ViewerHome() {
   };
 
   return (
-    <div className="space-y-6">
-      <div className="flex items-center justify-between gap-6">
-        <div className="flex-shrink-0">
-          <h1 className="text-3xl font-bold text-gray-900 mb-2">My Dashboards</h1>
-          <p className="text-gray-600">Access your assigned analytics dashboards</p>
+    <div style={{ display: 'flex', flexDirection: 'column', gap: '1.5rem' }}>
+      <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: '1.5rem' }}>
+        <div style={{ flexShrink: 0 }}>
+          <h1 style={{ fontSize: '1.875rem', fontWeight: 700, color: colors.text, marginBottom: '0.5rem' }}>My Dashboards</h1>
+          <p style={{ color: colors.muted }}>Access your assigned analytics dashboards</p>
         </div>
-        <div className="flex-1 max-w-md">
-          <div className="relative">
-            <Search className="absolute left-4 top-1/2 -translate-y-1/2 w-5 h-5 text-gray-400" />
+        <div style={{ flex: 1, maxWidth: '28rem' }}>
+          <div style={{ position: 'relative' }}>
+            <Search className="absolute left-4 top-1/2 -translate-y-1/2 w-5 h-5" style={{ color: colors.muted }} />
             <input
               type="text"
               value={searchTerm}
               onChange={(e) => setSearchTerm(e.target.value)}
               placeholder="Search dashboards..."
-              className="w-full pl-12 pr-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-green-500 focus:border-transparent outline-none bg-white shadow-sm"
+              style={{
+                width: '100%',
+                paddingLeft: '3rem',
+                paddingRight: '1rem',
+                paddingTop: '0.75rem',
+                paddingBottom: '0.75rem',
+                backgroundColor: colors.inputBg,
+                color: colors.text,
+                border: `1px solid ${colors.inputBorder}`,
+                borderRadius: '0.5rem',
+                outline: 'none',
+                boxShadow: '0 1px 2px rgba(0,0,0,0.05)'
+              }}
             />
           </div>
         </div>
       </div>
 
       {error && (
-        <div className="p-4 rounded-lg bg-red-50 text-red-700 text-sm">{error}</div>
+        <div style={{
+          padding: '1rem',
+          borderRadius: '0.5rem',
+          backgroundColor: `${palette.red}20`,
+          color: palette.red,
+          fontSize: '0.875rem'
+        }}>{error}</div>
       )}
 
       {/* Stats */}
       <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
-        <div className="bg-white rounded-xl p-6 shadow-sm border border-gray-200">
-          <div className="flex items-center justify-between">
+        <div style={{
+          backgroundColor: colors.cardBg,
+          borderRadius: '0.75rem',
+          padding: '1.5rem',
+          boxShadow: colors.cardShadow,
+          border: `1px solid ${colors.cardBorder}`
+        }}>
+          <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
             <div>
-              <p className="text-sm text-gray-600 mb-1">Available Dashboards</p>
-              <p className="text-3xl font-bold text-gray-900">
+              <p style={{ fontSize: '0.875rem', color: colors.muted, marginBottom: '0.25rem' }}>Available Dashboards</p>
+              <p style={{ fontSize: '1.875rem', fontWeight: 700, color: colors.text }}>
                 {loading ? '—' : dashboards.length}
               </p>
             </div>
-            <BarChart3 className="w-12 h-12 text-green-400" />
+            <BarChart3 className="w-12 h-12" style={{ color: palette.green }} />
           </div>
         </div>
-        <div className="bg-white rounded-xl p-6 shadow-sm border border-gray-200">
-          <div className="flex items-center justify-between">
+        <div style={{
+          backgroundColor: colors.cardBg,
+          borderRadius: '0.75rem',
+          padding: '1.5rem',
+          boxShadow: colors.cardShadow,
+          border: `1px solid ${colors.cardBorder}`
+        }}>
+          <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
             <div>
-              <p className="text-sm text-gray-600 mb-1">Favorites</p>
-              <p className="text-3xl font-bold text-gray-900">{favorites.length}</p>
+              <p style={{ fontSize: '0.875rem', color: colors.muted, marginBottom: '0.25rem' }}>Favorites</p>
+              <p style={{ fontSize: '1.875rem', fontWeight: 700, color: colors.text }}>{favorites.length}</p>
             </div>
-            <Star className="w-12 h-12 text-yellow-400" />
+            <Star className="w-12 h-12" style={{ color: palette.orange }} />
           </div>
         </div>
-        <div className="bg-white rounded-xl p-6 shadow-sm border border-gray-200">
-          <div className="flex items-center justify-between">
+        <div style={{
+          backgroundColor: colors.cardBg,
+          borderRadius: '0.75rem',
+          padding: '1.5rem',
+          boxShadow: colors.cardShadow,
+          border: `1px solid ${colors.cardBorder}`
+        }}>
+          <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
             <div>
-              <p className="text-sm text-gray-600 mb-1">Recently Viewed</p>
-              <p className="text-3xl font-bold text-gray-900">—</p>
+              <p style={{ fontSize: '0.875rem', color: colors.muted, marginBottom: '0.25rem' }}>Recently Viewed</p>
+              <p style={{ fontSize: '1.875rem', fontWeight: 700, color: colors.text }}>—</p>
             </div>
-            <Clock className="w-12 h-12 text-blue-400" />
+            <Clock className="w-12 h-12" style={{ color: palette.blue }} />
           </div>
         </div>
       </div>
 
       {loading ? (
-        <div className="flex justify-center py-12">
-          <Loader2 className="w-10 h-10 text-green-500 animate-spin" />
+        <div style={{ display: 'flex', justifyContent: 'center', padding: '3rem 0' }}>
+          <Loader2 className="w-10 h-10 animate-spin" style={{ color: palette.green }} />
         </div>
       ) : (
         <>
           <div>
-            <h2 className="text-xl font-semibold text-gray-900 mb-4">Your Dashboards</h2>
+            <h2 style={{ fontSize: '1.25rem', fontWeight: 600, color: colors.text, marginBottom: '1rem' }}>Your Dashboards</h2>
             <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
               {sortedDashboards.map((d) => {
                 const isFavorite = favorites.includes(String(d.id));
@@ -161,53 +204,88 @@ export default function ViewerHome() {
                   <div
                     key={d.id}
                     onClick={() => navigate(`/viewer/view/${d.id}`)}
-                    className="bg-white rounded-xl shadow-sm border border-gray-200 overflow-hidden hover:shadow-lg transition-all cursor-pointer group relative"
+                    style={{
+                      backgroundColor: colors.cardBg,
+                      borderRadius: '0.75rem',
+                      boxShadow: colors.cardShadow,
+                      border: `1px solid ${colors.cardBorder}`,
+                      overflow: 'hidden',
+                      cursor: 'pointer',
+                      position: 'relative'
+                    }}
+                    className="group"
                   >
                     <button
                       onClick={(e) => toggleFavorite(String(d.id), e)}
-                      className={`absolute top-3 right-3 z-10 p-2 rounded-full transition-all ${
-                        isFavorite
-                          ? 'bg-yellow-100 text-yellow-500 hover:bg-yellow-200'
-                          : 'bg-white/90 text-gray-400 hover:bg-white hover:text-yellow-500'
-                      }`}
+                      style={{
+                        position: 'absolute',
+                        top: '0.75rem',
+                        right: '0.75rem',
+                        zIndex: 10,
+                        padding: '0.5rem',
+                        borderRadius: '9999px',
+                        backgroundColor: isFavorite ? `${palette.orange}30` : `${colors.cardBg}ee`,
+                        color: isFavorite ? palette.orange : colors.muted,
+                        border: 'none',
+                        cursor: 'pointer'
+                      }}
                     >
                       <Star
                         className={`w-5 h-5 ${isFavorite ? 'fill-yellow-500' : ''}`}
                       />
                     </button>
-                    <div className="h-40 bg-gradient-to-br from-green-50 to-blue-50 flex items-center justify-center border-b border-gray-200">
-                      <BarChart3 className="w-16 h-16 text-green-600 opacity-50 group-hover:opacity-100 transition-opacity" />
+                    <div style={{
+                      height: '10rem',
+                      background: isDark
+                        ? 'linear-gradient(to bottom right, #1a3a2a, #1a2a3a)'
+                        : 'linear-gradient(to bottom right, #ecfdf5, #eff6ff)',
+                      display: 'flex',
+                      alignItems: 'center',
+                      justifyContent: 'center',
+                      borderBottom: `1px solid ${colors.cardBorder}`
+                    }}>
+                      <BarChart3 className="w-16 h-16 group-hover:opacity-100 transition-opacity" style={{ color: palette.green, opacity: 0.5 }} />
                     </div>
-                    <div className="p-6">
-                      <h3 className="text-lg font-semibold text-gray-900 mb-2 group-hover:text-green-600 transition-colors">
+                    <div style={{ padding: '1.5rem' }}>
+                      <h3 style={{ fontSize: '1.125rem', fontWeight: 600, color: colors.text, marginBottom: '0.5rem' }} className="group-hover:text-green-600 transition-colors">
                         {d.name}
                       </h3>
-                      <p className="text-sm text-gray-600 mb-4 line-clamp-2">
+                      <p style={{ fontSize: '0.875rem', color: colors.muted, marginBottom: '1rem' }} className="line-clamp-2">
                         {d.description || 'No description'}
                       </p>
-                      <div className="flex items-center justify-between text-sm text-gray-500">
-                        <div className="flex items-center">
+                      <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', fontSize: '0.875rem', color: colors.muted }}>
+                        <div style={{ display: 'flex', alignItems: 'center' }}>
                           <Star
-                            className={`w-4 h-4 mr-1 ${
-                              isFavorite ? 'fill-yellow-500 text-yellow-500' : ''
-                            }`}
+                            className={`w-4 h-4 mr-1 ${isFavorite ? 'fill-yellow-500 text-yellow-500' : ''
+                              }`}
                           />
                           <span>
                             {isFavorite ? 'Favorited' : 'Add to favorites'}
                           </span>
                         </div>
-                        <div className="flex items-center">
+                        <div style={{ display: 'flex', alignItems: 'center' }}>
                           <BarChart3 className="w-4 h-4 mr-1" />
                           <span>{widgetCount(d)} widgets</span>
                         </div>
                       </div>
-                      <div className="mt-4 pt-4 border-t border-gray-200">
+                      <div style={{ marginTop: '1rem', paddingTop: '1rem', borderTop: `1px solid ${colors.cardBorder}` }}>
                         <button
                           onClick={(e) => {
                             e.stopPropagation();
                             navigate(`/viewer/view/${d.id}`);
                           }}
-                          className="w-full flex items-center justify-center px-4 py-2 bg-green-600 text-white rounded-lg hover:bg-green-700 transition-colors"
+                          style={{
+                            width: '100%',
+                            display: 'flex',
+                            alignItems: 'center',
+                            justifyContent: 'center',
+                            padding: '0.5rem 1rem',
+                            backgroundColor: '#16a34a',
+                            color: 'white',
+                            borderRadius: '0.5rem',
+                            border: 'none',
+                            cursor: 'pointer'
+                          }}
                         >
                           <Eye className="w-4 h-4 mr-2" />
                           View Dashboard
@@ -221,10 +299,16 @@ export default function ViewerHome() {
           </div>
 
           {filteredDashboards.length === 0 && (
-            <div className="bg-white rounded-xl p-12 text-center border border-gray-200">
-              <BarChart3 className="w-16 h-16 text-gray-300 mx-auto mb-4" />
-              <h3 className="text-lg font-medium text-gray-900 mb-2">No Dashboards Found</h3>
-              <p className="text-gray-600">
+            <div style={{
+              backgroundColor: colors.cardBg,
+              borderRadius: '0.75rem',
+              padding: '3rem',
+              textAlign: 'center',
+              border: `1px solid ${colors.cardBorder}`
+            }}>
+              <BarChart3 className="w-16 h-16 mx-auto mb-4" style={{ color: colors.muted }} />
+              <h3 style={{ fontSize: '1.125rem', fontWeight: 500, color: colors.text, marginBottom: '0.5rem' }}>No Dashboards Found</h3>
+              <p style={{ color: colors.muted }}>
                 {searchTerm
                   ? 'Try adjusting your search terms'
                   : 'No dashboards have been assigned to you yet'}
@@ -236,27 +320,33 @@ export default function ViewerHome() {
 
       {/* Quick Tips */}
       <div>
-        <h2 className="text-xl font-semibold text-gray-900 mb-4">Quick Tips</h2>
-        <div className="bg-gradient-to-r from-green-500 to-emerald-600 rounded-xl p-6 shadow-sm text-white">
-          <div className="flex items-start">
-            <div className="bg-white/20 p-3 rounded-lg mr-4">
+        <h2 style={{ fontSize: '1.25rem', fontWeight: 600, color: colors.text, marginBottom: '1rem' }}>Quick Tips</h2>
+        <div style={{
+          background: 'linear-gradient(to right, #22c55e, #10b981)',
+          borderRadius: '0.75rem',
+          padding: '1.5rem',
+          boxShadow: '0 1px 3px rgba(0,0,0,0.1)',
+          color: 'white'
+        }}>
+          <div style={{ display: 'flex', alignItems: 'flex-start' }}>
+            <div style={{ backgroundColor: 'rgba(255,255,255,0.2)', padding: '0.75rem', borderRadius: '0.5rem', marginRight: '1rem' }}>
               <Star className="w-6 h-6 text-white" />
             </div>
             <div>
-              <h3 className="font-semibold mb-2 text-lg">
+              <h3 style={{ fontWeight: 600, marginBottom: '0.5rem', fontSize: '1.125rem' }}>
                 Star Your Favorite Dashboards
               </h3>
-              <p className="text-green-50 mb-3">
+              <p style={{ color: 'rgba(236,253,245,1)', marginBottom: '0.75rem' }}>
                 Click the star icon on any dashboard card to mark it as a favorite.
                 Your starred dashboards appear at the top for quick access.
               </p>
-              <ul className="space-y-2 text-green-50">
-                <li className="flex items-center">
-                  <span className="mr-2">•</span>
+              <ul style={{ display: 'flex', flexDirection: 'column', gap: '0.5rem', color: 'rgba(236,253,245,1)' }}>
+                <li style={{ display: 'flex', alignItems: 'center' }}>
+                  <span style={{ marginRight: '0.5rem' }}>•</span>
                   <span>Use the search bar to find specific dashboards</span>
                 </li>
-                <li className="flex items-center">
-                  <span className="mr-2">•</span>
+                <li style={{ display: 'flex', alignItems: 'center' }}>
+                  <span style={{ marginRight: '0.5rem' }}>•</span>
                   <span>Dashboards update with the latest data</span>
                 </li>
               </ul>

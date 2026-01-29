@@ -1,11 +1,15 @@
 import { useState, useRef, createRef, useEffect, useCallback } from 'react';
-import { BarChart3, LineChart as LineChartIcon, PieChart as PieChartIcon, Table as TableIcon, Save, Eye, ArrowLeft, Activity, Target, Gauge, Grid3x3, X, ChevronRight, ChevronDown, Layers, Hash, Filter as FilterIcon, GripVertical, Database, Loader2, CheckCircle } from 'lucide-react';
-import { BarChart, Bar, LineChart, Line, PieChart, Pie, Cell, AreaChart, Area, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, Legend, Treemap } from 'recharts';
+import { BarChart3, LineChart as LineChartIcon, PieChart as PieChartIcon, Table as TableIcon, Save, Eye, ArrowLeft, Activity, Target, Gauge, Grid3x3, X, ChevronRight, ChevronDown, Layers, Hash, Filter as FilterIcon, GripVertical, Database, Loader2, CheckCircle, ZoomIn, ZoomOut, Maximize2 } from 'lucide-react';
 import { useNavigate, useParams } from 'react-router';
 import Draggable from 'react-draggable';
 import { Resizable } from 're-resizable';
+import { Panel, PanelGroup, PanelResizeHandle } from 'react-resizable-panels';
 import { apiGet, apiPost, apiPut } from '../../lib/api';
 import { useAuth } from '../../contexts/AuthContext';
+import { useTheme } from '../../contexts/ThemeContext';
+import { getThemeColors } from '../../lib/themeColors';
+import { validateChartConfig } from '../../lib/chartRegistry';
+import { ChartRenderer, type ChartWidgetConfig } from '../charts/ChartRenderer';
 import UserAssignmentModal from './UserAssignmentModal';
 import DashboardDetailsModal from './DashboardDetailsModal';
 
@@ -16,6 +20,11 @@ interface Widget {
   dataKey?: string;
   position: { x: number; y: number };
   size: { width: number; height: number };
+  /**
+   * PowerBI-like semantic aggregation for visuals.
+   * - Charts: aggregates Values (yAxis/field) by X-axis (and Legend when relevant)
+   * - Cards: aggregates single Field
+   */
   aggregation?: 'count' | 'sum' | 'first' | 'last' | 'percentage';
   field?: string;
   xAxis?: string;
@@ -24,6 +33,10 @@ interface Widget {
   filterField?: string;
   selectedFilters?: string[];
   datasetId?: number; // Link widget to a data source
+  /**
+   * Visual accent (used for KPI/format accents). Charts use shared PowerBI palette.
+   */
+  accentColor?: string;
 }
 
 interface Dataset {
@@ -45,6 +58,8 @@ export default function DashboardBuilder() {
   const navigate = useNavigate();
   const { id } = useParams<{ id?: string }>();
   const { user } = useAuth();
+  const { isDark } = useTheme();
+  const colors = getThemeColors(isDark);
   const [widgets, setWidgets] = useState<Widget[]>([]);
   const [selectedWidget, setSelectedWidget] = useState<string | null>(null);
   const [dataSourcesPanelExpanded, setDataSourcesPanelExpanded] = useState(true);
@@ -59,7 +74,7 @@ export default function DashboardBuilder() {
   const [showDetailsModal, setShowDetailsModal] = useState(false);
   const [pendingAction, setPendingAction] = useState<'save' | 'publish' | null>(null);
   const [dashboardId, setDashboardId] = useState<number | null>(id ? parseInt(id) : null);
-  
+
   // Data source management
   const [datasets, setDatasets] = useState<Dataset[]>([]);
   const [selectedDatasets, setSelectedDatasets] = useState<Set<number>>(new Set());
@@ -68,6 +83,17 @@ export default function DashboardBuilder() {
   const [loadingDatasets, setLoadingDatasets] = useState(true);
   const [loadingData, setLoadingData] = useState<Record<number, boolean>>({});
   const [draggedColumn, setDraggedColumn] = useState<{ datasetId: number; columnName: string } | null>(null);
+  const [fieldSearch, setFieldSearch] = useState('');
+  const [rightTab, setRightTab] = useState<'visualizations' | 'fields' | 'format'>('fields');
+  const canvasRef = useRef<HTMLDivElement | null>(null);
+  const rightPanelScrollRef = useRef<HTMLDivElement | null>(null);
+  const [viewportSize, setViewportSize] = useState({ w: 0, h: 0 });
+  // Canva-like canvas: zoom, pan, expandable stage
+  const [zoom, setZoom] = useState(0.75);
+  const [pan, setPan] = useState({ x: 0, y: 0 });
+  const [isPanning, setIsPanning] = useState(false);
+  const panStartRef = useRef<{ x: number; y: number; offX: number; offY: number } | null>(null);
+  const hasPannedRef = useRef(false);
 
   // Fetch datasets on mount
   useEffect(() => {
@@ -88,6 +114,55 @@ export default function DashboardBuilder() {
     fetchDatasets();
   }, []);
 
+  // Track viewport size for fit-to-view and canvas layout
+  useEffect(() => {
+    if (!canvasRef.current) return;
+    const el = canvasRef.current;
+    const update = () => setViewportSize({ w: el.clientWidth || 0, h: el.clientHeight || 0 });
+    update();
+    const ro = new ResizeObserver(update);
+    ro.observe(el);
+    return () => ro.disconnect();
+  }, []);
+
+  // Pan: attach window mousemove/mouseup when isPanning
+  useEffect(() => {
+    if (!isPanning) return;
+    const onMove = (e: MouseEvent) => {
+      const s = panStartRef.current;
+      if (s) {
+        setPan((p) => ({ x: s.offX + e.clientX - s.x, y: s.offY + e.clientY - s.y }));
+        hasPannedRef.current = true;
+      }
+    };
+    const onUp = (e: MouseEvent) => {
+      // Only deselect when releasing *inside* the canvas. Releasing over Format/sidebar must not deselect.
+      const inCanvas = canvasRef.current?.contains(e.target as Node);
+      if (!hasPannedRef.current && inCanvas) setSelectedWidget(null);
+      panStartRef.current = null;
+      setIsPanning(false);
+    };
+    window.addEventListener('mousemove', onMove);
+    window.addEventListener('mouseup', onUp);
+    return () => {
+      window.removeEventListener('mousemove', onMove);
+      window.removeEventListener('mouseup', onUp);
+    };
+  }, [isPanning]);
+
+  // Wheel zoom (non-passive so preventDefault works)
+  useEffect(() => {
+    const el = canvasRef.current;
+    if (!el) return;
+    const onWheel = (e: WheelEvent) => {
+      e.preventDefault();
+      const d = e.deltaY > 0 ? -0.1 : 0.1;
+      setZoom((z) => Math.min(2, Math.max(0.15, z + d)));
+    };
+    el.addEventListener('wheel', onWheel, { passive: false });
+    return () => el.removeEventListener('wheel', onWheel);
+  }, []);
+
   // Fetch data and columns for selected datasets
   const fetchDatasetData = useCallback(async (datasetId: number) => {
     setLoadingData((prev) => ({ ...prev, [datasetId]: true }));
@@ -100,7 +175,7 @@ export default function DashboardBuilder() {
         // Extract columns from schema or first row
         const dataset = datasets.find((d) => d.id === datasetId);
         let cols: Column[] = [];
-        
+
         if (dataset?.schema_definition) {
           try {
             const schema =
@@ -114,14 +189,14 @@ export default function DashboardBuilder() {
             // Fallback to first row
           }
         }
-        
+
         if (cols.length === 0 && rows.length > 0 && typeof rows[0] === 'object' && rows[0] !== null) {
           cols = Object.keys(rows[0] as Record<string, unknown>).map((key) => ({
             name: key,
             type: 'string',
           }));
         }
-        
+
         setColumns((prev) => ({ ...prev, [datasetId]: cols }));
       }
     } catch (e) {
@@ -174,18 +249,19 @@ export default function DashboardBuilder() {
     }
   }, [id]);
 
-  const visualizationTypes = [
-    { type: 'bar' as const, icon: BarChart3, label: 'Bar', color: 'text-blue-600' },
-    { type: 'stacked-bar' as const, icon: Layers, label: 'Stacked', color: 'text-blue-600' },
-    { type: 'line' as const, icon: LineChartIcon, label: 'Line', color: 'text-green-600' },
-    { type: 'area' as const, icon: Activity, label: 'Area', color: 'text-purple-600' },
-    { type: 'pie' as const, icon: PieChartIcon, label: 'Pie', color: 'text-orange-600' },
-    { type: 'donut' as const, icon: Target, label: 'Donut', color: 'text-pink-600' },
-    { type: 'treemap' as const, icon: Grid3x3, label: 'Treemap', color: 'text-teal-600' },
-    { type: 'gauge' as const, icon: Gauge, label: 'Gauge', color: 'text-indigo-600' },
-    { type: 'card' as const, icon: Hash, label: 'Card', color: 'text-cyan-600' },
-    { type: 'filter' as const, icon: FilterIcon, label: 'Filter', color: 'text-red-600' },
-    { type: 'table' as const, icon: TableIcon, label: 'Table', color: 'text-gray-600' },
+  /** Chart types shown in visualization panel. Registry-driven; icons mapped locally. */
+  const vizPanelTypes: { type: Widget['type']; icon: typeof BarChart3; label: string; color: string }[] = [
+    { type: 'bar', icon: BarChart3, label: 'Bar', color: 'text-blue-600' },
+    { type: 'stacked-bar', icon: Layers, label: 'Stacked Bar', color: 'text-blue-600' },
+    { type: 'line', icon: LineChartIcon, label: 'Line', color: 'text-green-600' },
+    { type: 'area', icon: Activity, label: 'Area', color: 'text-purple-600' },
+    { type: 'pie', icon: PieChartIcon, label: 'Pie', color: 'text-orange-600' },
+    { type: 'donut', icon: Target, label: 'Donut', color: 'text-pink-600' },
+    { type: 'treemap', icon: Grid3x3, label: 'Treemap', color: 'text-teal-600' },
+    { type: 'gauge', icon: Gauge, label: 'Gauge', color: 'text-indigo-600' },
+    { type: 'card', icon: Hash, label: 'Card', color: 'text-cyan-600' },
+    { type: 'filter', icon: FilterIcon, label: 'Slicer', color: 'text-red-600' },
+    { type: 'table', icon: TableIcon, label: 'Table', color: 'text-gray-600' },
   ];
 
   const toggleDatasetSelection = (datasetId: number) => {
@@ -219,23 +295,30 @@ export default function DashboardBuilder() {
     setDraggedColumn(null);
   };
 
-  const handleDrop = (target: 'xAxis' | 'yAxis' | 'legend', widgetId: string) => {
+  type FieldBucket = 'xAxis' | 'yAxis' | 'legend' | 'field' | 'filterField';
+
+  const handleDrop = (target: FieldBucket, widgetId: string) => {
     if (!draggedColumn || !selectedWidget) return;
-    
+
     const columnName = draggedColumn.columnName;
     const updates: Partial<Widget> = {};
-    
+
     if (target === 'xAxis') {
       updates.xAxis = columnName;
     } else if (target === 'yAxis') {
       updates.yAxis = columnName;
     } else if (target === 'legend') {
       updates.legend = columnName;
+    } else if (target === 'field') {
+      updates.field = columnName;
+    } else if (target === 'filterField') {
+      updates.filterField = columnName;
+      updates.selectedFilters = [];
     }
-    
+
     // Also link widget to the dataset
     updates.datasetId = draggedColumn.datasetId;
-    
+
     updateWidget(widgetId, updates);
     setDraggedColumn(null);
   };
@@ -264,6 +347,7 @@ export default function DashboardBuilder() {
     setSaving(true);
     try {
       const config = {
+        configVersion: 1,
         widgets,
         selectedDatasets: Array.from(selectedDatasets),
         category: category || undefined,
@@ -353,6 +437,7 @@ export default function DashboardBuilder() {
     setPublishing(true);
     try {
       const config = {
+        configVersion: 1,
         widgets,
         selectedDatasets: Array.from(selectedDatasets),
         category: dashboardCategory || undefined,
@@ -414,32 +499,36 @@ export default function DashboardBuilder() {
   const addWidget = (type: Widget['type']) => {
     // If a widget is selected, change its type instead of adding new
     if (selectedWidget) {
-      updateWidget(selectedWidget, { 
-        type, 
-        title: `${type.charAt(0).toUpperCase() + type.slice(1)} Chart` 
+      updateWidget(selectedWidget, {
+        type,
+        title: `${type.charAt(0).toUpperCase() + type.slice(1)} Chart`
       });
     } else {
       // Add new widget when no widget is selected
+      const size = {
+        width: type === 'filter' ? 250 : type === 'card' ? 280 : 450,
+        height: type === 'filter' ? 200 : type === 'card' ? 180 : 350
+      };
+      const position = findNextFreePosition(size);
       const newWidget: Widget = {
         id: Date.now().toString(),
         type,
         title: `New ${type.charAt(0).toUpperCase() + type.slice(1)}`,
-        position: { x: 50, y: 50 },
-        size: { 
-          width: type === 'filter' ? 250 : type === 'card' ? 280 : 450, 
-          height: type === 'filter' ? 200 : type === 'card' ? 180 : 350 
-        },
-        aggregation: type === 'card' ? 'count' : undefined,
+        position,
+        size,
+        aggregation: type === 'card' ? 'count' : 'sum',
         field: undefined,
         xAxis: undefined, // No default - user must select
         yAxis: undefined, // No default - user must select
         legend: undefined, // No default - user must select
         filterField: type === 'filter' ? undefined : undefined,
         selectedFilters: [],
-        datasetId: selectedDatasets.size > 0 ? Array.from(selectedDatasets)[0] : undefined
+        datasetId: selectedDatasets.size > 0 ? (Array.from(selectedDatasets)[0] as number) : undefined,
+        accentColor: '#118DFF', // PowerBI-ish default
       };
       setWidgets([...widgets, newWidget]);
       setSelectedWidget(newWidget.id);
+      setRightTab('fields');
     }
   };
 
@@ -462,358 +551,228 @@ export default function DashboardBuilder() {
     setWidgets(widgets.map(w => w.id === id ? { ...w, ...updates } : w));
   };
 
-  const COLORS = ['#3b82f6', '#10b981', '#f59e0b', '#ef4444', '#8b5cf6'];
+  /**
+   * Dashboard JSON schema (stored in backend dashboard config today)
+   * ------------------------------------------------------------
+   * {
+   *   widgets: Widget[],
+   *   selectedDatasets: number[],
+   *   category?: string
+   * }
+   *
+   * Widget highlights:
+   * - position/size => layout (canvas)
+   * - datasetId => binding
+   * - xAxis/yAxis/legend/field/filterField => PowerBI-like buckets
+   * - aggregation => semantic aggregation (sum/count/etc)
+   */
+  const COLORS = ['#118DFF', '#12239E', '#E66C37', '#6B007B', '#00B7C3', '#744EC2', '#D64550', '#7FBA00'];
+  const GRID_SIZE = 10;
+  const CANVAS_PADDING = 20;
+  const STAGE_WIDTH = 4000;
+  const STAGE_HEIGHT = 3000;
 
-  // Get data for a widget from its linked dataset
-  const getWidgetData = (widget: Widget): unknown[] => {
-    if (widget.datasetId && datasetData[widget.datasetId]) {
-      return datasetData[widget.datasetId];
-    }
-    // Fallback to first selected dataset if widget doesn't have one
-    if (selectedDatasets.size > 0) {
-      const firstDatasetId = Array.from(selectedDatasets)[0];
-      return datasetData[firstDatasetId] || [];
-    }
-    return [];
-  };
+  const snapToGrid = useCallback((value: number) => {
+    return Math.round(value / GRID_SIZE) * GRID_SIZE;
+  }, []);
 
-  const getCardValue = (widget: Widget) => {
-    const aggregation = widget.aggregation || 'count';
-    const data = getWidgetData(widget);
-    
-    if (!widget.field || data.length === 0) {
-      return '0';
-    }
-    
-    switch (aggregation) {
-      case 'count':
-        return data.length.toString();
-      case 'sum':
-        const sum = data.reduce((acc: number, item: any) => {
-          const val = Number(item[widget.field!]) || 0;
-          return acc + val;
-        }, 0);
-        return sum.toLocaleString();
-      case 'first':
-        const first = data[0] as any;
-        return first?.[widget.field!]?.toString() || '0';
-      case 'last':
-        const last = data[data.length - 1] as any;
-        return last?.[widget.field!]?.toString() || '0';
-      case 'percentage':
-        return '85%';
-      default:
-        return '0';
-    }
-  };
+  const rectsOverlap = useCallback(
+    (a: { x: number; y: number; w: number; h: number }, b: { x: number; y: number; w: number; h: number }) => {
+      return a.x < b.x + b.w && a.x + a.w > b.x && a.y < b.y + b.h && a.y + a.h > b.y;
+    },
+    []
+  );
+
+  /**
+   * PowerBI-like auto-layout:
+   * When adding a new visual, find the next free slot on the canvas (grid-snapped)
+   * so visuals never overlap. If the row is full, it places the visual below.
+   */
+  const findNextFreePosition = useCallback(
+    (newSize: { width: number; height: number }) => {
+      const usableWidth = Math.max(0, STAGE_WIDTH - CANVAS_PADDING * 2);
+      const maxY = STAGE_HEIGHT - CANVAS_PADDING - newSize.height;
+      const step = GRID_SIZE;
+      const pad = 12;
+
+      const maxX = Math.max(CANVAS_PADDING, CANVAS_PADDING + usableWidth - newSize.width);
+      const existing = widgets.map((it) => ({
+        x: it.position.x - pad,
+        y: it.position.y - pad,
+        w: it.size.width + pad * 2,
+        h: it.size.height + pad * 2,
+      }));
+
+      let y = CANVAS_PADDING;
+      const safetyMaxRows = 600;
+      for (let row = 0; row < safetyMaxRows; row++) {
+        if (y + newSize.height > STAGE_HEIGHT - CANVAS_PADDING) break;
+        for (let x = CANVAS_PADDING; x <= maxX; x += step) {
+          const candidate = { x, y, w: newSize.width, h: newSize.height };
+          const overlaps = existing.some((r) => rectsOverlap(candidate, r));
+          if (!overlaps) return { x: snapToGrid(x), y: snapToGrid(y) };
+        }
+        const bottoms = existing.map((r) => r.y + r.h);
+        const nextY = bottoms.length > 0 ? Math.min(...bottoms.filter((b) => b > y + 1)) : y + newSize.height + pad;
+        y = snapToGrid(Number.isFinite(nextY) ? nextY : y + newSize.height + pad);
+      }
+
+      const maxBottom = widgets.reduce((m, it) => Math.max(m, it.position.y + it.size.height), 0);
+      const fallbackY = Math.min(snapToGrid(maxBottom + pad), Math.max(CANVAS_PADDING, maxY));
+      return { x: CANVAS_PADDING, y: fallbackY };
+    },
+    [CANVAS_PADDING, GRID_SIZE, STAGE_WIDTH, STAGE_HEIGHT, rectsOverlap, snapToGrid, widgets]
+  );
+
+  const applyGlobalFilters = useCallback(
+    (rows: unknown[]) => {
+      const filters = globalFilters || {};
+      const keys = Object.keys(filters);
+      if (keys.length === 0) return rows;
+      return rows.filter((r: any) => {
+        if (!r || typeof r !== 'object') return false;
+        for (const k of keys) {
+          const allowed = filters[k];
+          if (!allowed || allowed.length === 0) continue;
+          const v = r[k];
+          if (!allowed.includes(String(v))) return false;
+        }
+        return true;
+      });
+    },
+    [globalFilters]
+  );
+
+  // Get data for a widget from its linked dataset (then apply cross-filters like PowerBI)
+  const getWidgetData = useCallback(
+    (widget: Widget): unknown[] => {
+      let rows: unknown[] = [];
+      if (widget.datasetId && datasetData[widget.datasetId]) {
+        rows = datasetData[widget.datasetId];
+      } else if (selectedDatasets.size > 0) {
+        const firstDatasetId = Array.from(selectedDatasets)[0];
+        rows = datasetData[firstDatasetId] || [];
+      }
+      return applyGlobalFilters(rows);
+    },
+    [applyGlobalFilters, datasetData, selectedDatasets]
+  );
 
   const renderWidget = (widget: Widget) => {
-    // Get real data from selected dataset
-    const widgetData = getWidgetData(widget);
-    
-    // If no data, show message
-    if (widgetData.length === 0) {
-      return (
-        <div className="flex items-center justify-center h-full text-gray-500 text-sm">
-          {widget.datasetId ? 'No data available' : 'Select a data source and assign columns'}
-        </div>
-      );
-    }
-
-    // Apply legend color mapping if legend field is set
-    const hasLegend = widget.legend && widget.legend.length > 0;
-
-    switch (widget.type) {
-      case 'bar':
-        return (
-          <ResponsiveContainer width="100%" height="100%">
-            <BarChart data={widgetData}>
-              <CartesianGrid strokeDasharray="3 3" stroke="#e5e7eb" />
-              <XAxis dataKey={widget.xAxis} stroke="#6b7280" fontSize={11} />
-              <YAxis stroke="#6b7280" fontSize={11} />
-              <Tooltip />
-              <Legend />
-              <Bar dataKey={widget.yAxis} fill="#3b82f6" radius={[4, 4, 0, 0]} />
-            </BarChart>
-          </ResponsiveContainer>
-        );
-      case 'stacked-bar':
-        return (
-          <ResponsiveContainer width="100%" height="100%">
-            <BarChart data={widgetData}>
-              <CartesianGrid strokeDasharray="3 3" stroke="#e5e7eb" />
-              <XAxis dataKey={widget.xAxis} stroke="#6b7280" fontSize={11} />
-              <YAxis stroke="#6b7280" fontSize={11} />
-              <Tooltip />
-              <Legend />
-              {widget.yAxis && <Bar dataKey={widget.yAxis} stackId="a" fill="#3b82f6" />}
-            </BarChart>
-          </ResponsiveContainer>
-        );
-      case 'line':
-        return (
-          <ResponsiveContainer width="100%" height="100%">
-            <LineChart data={widgetData}>
-              <CartesianGrid strokeDasharray="3 3" stroke="#e5e7eb" />
-              <XAxis dataKey={widget.xAxis} stroke="#6b7280" fontSize={11} />
-              <YAxis stroke="#6b7280" fontSize={11} />
-              <Tooltip />
-              <Legend />
-              {widget.yAxis && <Line type="monotone" dataKey={widget.yAxis} stroke="#3b82f6" strokeWidth={2} />}
-            </LineChart>
-          </ResponsiveContainer>
-        );
-      case 'area':
-        return (
-          <ResponsiveContainer width="100%" height="100%">
-            <AreaChart data={widgetData}>
-              <CartesianGrid strokeDasharray="3 3" stroke="#e5e7eb" />
-              <XAxis dataKey={widget.xAxis} stroke="#6b7280" fontSize={11} />
-              <YAxis stroke="#6b7280" fontSize={11} />
-              <Tooltip />
-              <Legend />
-              {widget.yAxis && <Area type="monotone" dataKey={widget.yAxis} stroke="#3b82f6" fill="#3b82f6" fillOpacity={0.3} />}
-            </AreaChart>
-          </ResponsiveContainer>
-        );
-      case 'pie':
-        return (
-          <ResponsiveContainer width="100%" height="100%">
-            <PieChart>
-              <Pie
-                data={widgetData}
-                dataKey={widget.yAxis || widget.field}
-                nameKey={widget.legend || widget.xAxis}
-                cx="50%"
-                cy="50%"
-                outerRadius={80}
-                label
-              >
-                {widgetData.map((entry: any, index: number) => (
-                  <Cell key={`cell-${index}`} fill={COLORS[index % COLORS.length]} />
-                ))}
-              </Pie>
-              <Tooltip />
-              <Legend />
-            </PieChart>
-          </ResponsiveContainer>
-        );
-      case 'donut':
-        return (
-          <ResponsiveContainer width="100%" height="100%">
-            <PieChart>
-              <Pie
-                data={widgetData}
-                dataKey={widget.yAxis || widget.field}
-                nameKey={widget.legend || widget.xAxis}
-                cx="50%"
-                cy="50%"
-                innerRadius={60}
-                outerRadius={80}
-                label
-              >
-                {widgetData.map((entry: any, index: number) => (
-                  <Cell key={`cell-${index}`} fill={COLORS[index % COLORS.length]} />
-                ))}
-              </Pie>
-              <Tooltip />
-              <Legend />
-            </PieChart>
-          </ResponsiveContainer>
-        );
-      case 'treemap':
-        if (widgetData.length === 0) {
-          return (
-            <div className="flex items-center justify-center h-full text-gray-500 text-sm">
-              No data available
-            </div>
-          );
+    const rawRows = getWidgetData(widget);
+    const mode = isDark ? 'dark' : 'light';
+    const config: ChartWidgetConfig = {
+      id: widget.id,
+      type: widget.type,
+      title: widget.title,
+      position: widget.position,
+      size: widget.size,
+      aggregation: widget.aggregation,
+      field: widget.field,
+      xAxis: widget.xAxis,
+      yAxis: widget.yAxis,
+      legend: widget.legend,
+      filterField: widget.filterField,
+      selectedFilters: widget.selectedFilters,
+      datasetId: widget.datasetId,
+      accentColor: widget.accentColor,
+    };
+    const onSlicerChange =
+      widget.type === 'filter' && widget.filterField
+        ? (value: string, selected: boolean) => {
+          const current = widget.selectedFilters || [];
+          const newFilters = selected ? [...current, value] : current.filter((f) => f !== value);
+          updateWidget(widget.id, { selectedFilters: newFilters });
+          setGlobalFilters((prev) => ({ ...prev, [widget.filterField!]: newFilters }));
         }
-        // Use real data - map to treemap format
-        const treemapData = widgetData.map((item: any, index: number) => ({
-          name: item[widget.xAxis || widget.legend || Object.keys(item)[0]] || `Item ${index}`,
-          size: Number(item[widget.yAxis || widget.field || Object.keys(item)[1]]) || 0,
-          fill: COLORS[index % COLORS.length]
-        }));
-        return (
-          <ResponsiveContainer width="100%" height="100%">
-            <Treemap
-              data={treemapData}
-              dataKey="size"
-              stroke="#fff"
-              fill="#3b82f6"
-            >
-              <Tooltip />
-            </Treemap>
-          </ResponsiveContainer>
-        );
-      case 'gauge':
-        const gaugeData = getWidgetData(widget);
-        let gaugeValue = 0;
-        if (gaugeData.length > 0 && widget.field) {
-          const firstItem = gaugeData[0] as any;
-          const value = Number(firstItem[widget.field]) || 0;
-          // Calculate percentage (assuming max is 100 or use aggregation)
-          gaugeValue = widget.aggregation === 'percentage' ? value : Math.min(100, (value / 100) * 100);
-        }
-        return (
-          <div className="flex flex-col items-center justify-center h-full">
-            <div className="relative w-32 h-32">
-              <svg viewBox="0 0 100 100" className="transform -rotate-90">
-                <circle cx="50" cy="50" r="45" fill="none" stroke="#e5e7eb" strokeWidth="10" />
-                <circle 
-                  cx="50" 
-                  cy="50" 
-                  r="45" 
-                  fill="none" 
-                  stroke="#3b82f6" 
-                  strokeWidth="10"
-                  strokeDasharray={`${gaugeValue * 2.827}, 283`}
-                />
-              </svg>
-              <div className="absolute inset-0 flex items-center justify-center">
-                <span className="text-2xl font-bold text-gray-900">{Math.round(gaugeValue)}%</span>
-              </div>
-            </div>
-            <p className="text-sm text-gray-600 mt-4">{widget.field || 'Value'}</p>
-          </div>
-        );
-      case 'card':
-        return (
-          <div className="flex flex-col items-center justify-center h-full bg-gradient-to-br from-indigo-50 to-blue-50 rounded-lg">
-            <p className="text-sm text-gray-600 mb-2">{widget.field || 'Total'}</p>
-            <p className="text-5xl font-bold text-indigo-600">{getCardValue(widget)}</p>
-            <p className="text-xs text-gray-500 mt-3 capitalize bg-white px-3 py-1 rounded-full">
-              {widget.aggregation || 'count'}
-            </p>
-          </div>
-        );
-      case 'table':
-        if (widgetData.length === 0) {
-          return (
-            <div className="flex items-center justify-center h-full text-gray-500 text-sm">
-              No data available
-            </div>
-          );
-        }
-        const firstRow = widgetData[0] as Record<string, unknown>;
-        const tableColumns = Object.keys(firstRow);
-        return (
-          <div className="overflow-auto h-full">
-            <table className="w-full text-sm">
-              <thead className="bg-gray-50 sticky top-0">
-                <tr>
-                  {tableColumns.map((col) => (
-                    <th key={col} className="px-3 py-2 text-left text-gray-600 text-xs">
-                      {col}
-                    </th>
-                  ))}
-                </tr>
-              </thead>
-              <tbody className="divide-y divide-gray-200">
-                {widgetData.map((row: any, idx: number) => (
-                  <tr key={idx} className="hover:bg-gray-50">
-                    {tableColumns.map((col) => (
-                      <td key={col} className="px-3 py-2 text-gray-900 text-xs">
-                        {String(row[col] ?? '')}
-                      </td>
-                    ))}
-                  </tr>
-                ))}
-              </tbody>
-            </table>
-          </div>
-        );
-      case 'filter':
-        const filterData = getWidgetData(widget);
-        const uniqueValues = widget.filterField 
-          ? Array.from(new Set(filterData.map((d: any) => d[widget.filterField!])))
-          : [];
-        
-        return (
-          <div className="h-full flex flex-col">
-            <div className="px-3 py-2 border-b border-gray-100">
-              <p className="text-xs font-medium text-gray-700">{widget.filterField || 'Select field'}</p>
-            </div>
-            <div className="flex-1 overflow-y-auto p-3">
-              {uniqueValues.length > 0 ? (
-                <div className="space-y-2">
-                  {uniqueValues.map((value, index) => {
-                    const isSelected = widget.selectedFilters?.includes(String(value));
-                    return (
-                      <button
-                        key={index}
-                        onClick={(e) => {
-                          e.stopPropagation();
-                          const currentFilters = widget.selectedFilters || [];
-                          const newFilters = isSelected
-                            ? currentFilters.filter(f => f !== String(value))
-                            : [...currentFilters, String(value)];
-                          updateWidget(widget.id, { selectedFilters: newFilters });
-                          
-                          if (widget.filterField) {
-                            setGlobalFilters(prev => ({
-                              ...prev,
-                              [widget.filterField!]: newFilters
-                            }));
-                          }
-                        }}
-                        className={`w-full text-left px-3 py-2 text-sm rounded transition-colors ${
-                          isSelected
-                            ? 'bg-indigo-100 text-indigo-900 font-medium'
-                            : 'bg-gray-50 text-gray-700 hover:bg-gray-100'
-                        }`}
-                      >
-                        <div className="flex items-center">
-                          <div className={`w-4 h-4 rounded border mr-2 flex items-center justify-center ${
-                            isSelected ? 'bg-indigo-600 border-indigo-600' : 'border-gray-300'
-                          }`}>
-                            {isSelected && (
-                              <svg className="w-3 h-3 text-white" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={3} d="M5 13l4 4L19 7" />
-                              </svg>
-                            )}
-                          </div>
-                          {String(value)}
-                        </div>
-                      </button>
-                    );
-                  })}
-                </div>
-              ) : (
-                <div className="flex items-center justify-center h-full">
-                  <p className="text-xs text-gray-500 text-center">
-                    Configure filter field<br/>in settings panel
-                  </p>
-                </div>
-              )}
-            </div>
-          </div>
-        );
-    }
+        : undefined;
+    return ChartRenderer(config, rawRows, { mode, onSlicerChange });
   };
 
   const selectedWidgetData = widgets.find(w => w.id === selectedWidget);
 
+  const BucketDropZone = ({
+    label,
+    value,
+    bucket,
+    widgetId,
+    hint,
+    onClear,
+  }: {
+    label: string;
+    value?: string;
+    bucket: FieldBucket;
+    widgetId: string;
+    hint?: string;
+    onClear?: () => void;
+  }) => {
+    return (
+      <div>
+        <div className="flex items-center justify-between mb-1">
+          <label style={{ color: colors.text }} className="block text-xs font-medium">
+            {label}
+          </label>
+          {value && onClear && (
+            <button
+              type="button"
+              onClick={onClear}
+              className="text-[11px] hover:underline"
+              style={{ color: colors.muted }}
+            >
+              Clear
+            </button>
+          )}
+        </div>
+        <div
+          onDragOver={(e) => {
+            e.preventDefault();
+            e.currentTarget.classList.add('border-indigo-500', 'bg-indigo-50');
+          }}
+          onDragLeave={(e) => {
+            e.currentTarget.classList.remove('border-indigo-500', 'bg-indigo-50');
+          }}
+          onDrop={(e) => {
+            e.preventDefault();
+            e.currentTarget.classList.remove('border-indigo-500', 'bg-indigo-50');
+            handleDrop(bucket, widgetId);
+          }}
+          style={{
+            backgroundColor: colors.inputBg,
+            borderColor: colors.inputBorder,
+            color: colors.text
+          }}
+          className="w-full px-3 py-2 text-sm border-2 border-dashed rounded-lg focus-within:border-indigo-500 transition-colors min-h-[40px] flex items-center"
+        >
+          {value ? (
+            <span style={{ color: colors.text }} className="text-sm">{value}</span>
+          ) : (
+            <span style={{ color: colors.muted }} className="text-sm">{hint || 'Drag field here'}</span>
+          )}
+        </div>
+      </div>
+    );
+  };
+
   return (
-    <div className="min-h-screen bg-gray-50 flex flex-col">
+    <div style={{ backgroundColor: colors.bg }} className="min-h-screen flex flex-col">
       {/* Top Navigation Bar */}
-      <div className="bg-white border-b border-gray-200 px-6 py-3">
+      <div style={{ backgroundColor: colors.cardBg, borderColor: colors.cardBorder }} className="border-b px-6 py-3">
         <div className="flex items-center justify-between">
           <div className="flex items-center gap-4">
             <button
               onClick={() => navigate('/developer/dashboard')}
-              className="p-2 text-gray-600 hover:text-gray-900 hover:bg-gray-100 rounded-lg transition-colors"
+              style={{ color: colors.text }}
+              className="p-2 hover:bg-gray-100 dark:hover:bg-gray-800 rounded-lg transition-colors"
               title="Back to Dashboard"
             >
               <ArrowLeft className="w-5 h-5" />
             </button>
             <div>
-              <h1 className="text-xl font-semibold text-gray-900">Dashboard Builder</h1>
-              <p className="text-xs text-gray-600">
-                {selectedWidget 
-                  ? "✨ Selected: Click a visual icon to change type, or click canvas to deselect" 
-                  : "Click visuals to add • Drag to move • Resize with handles"}
+              <h1 style={{ color: colors.text }} className="text-xl font-semibold">Dashboard Builder</h1>
+              <p style={{ color: colors.muted }} className="text-xs">
+                {selectedWidget
+                  ? "✨ Selected: Change type in Build, or click canvas to deselect"
+                  : "Scroll to zoom • Drag background to pan • Add visuals • Drag to move • Resize with handles"}
               </p>
             </div>
           </div>
@@ -823,11 +782,13 @@ export default function DashboardBuilder() {
               value={dashboardName}
               onChange={(e) => setDashboardName(e.target.value)}
               placeholder="Dashboard Name"
-              className="px-4 py-2 text-sm border border-gray-300 rounded-lg focus:ring-2 focus:ring-indigo-500 focus:border-transparent outline-none"
+              style={{ backgroundColor: colors.inputBg, borderColor: colors.inputBorder, color: colors.text }}
+              className="px-4 py-2 text-sm border rounded-lg focus:ring-2 focus:ring-indigo-500 focus:border-transparent outline-none"
             />
             <button
               onClick={() => navigate(`/developer/preview/${dashboardId || 'new'}`)}
-              className="flex items-center px-4 py-2 text-gray-600 hover:bg-gray-100 rounded-lg transition-colors text-sm"
+              style={{ color: colors.text }}
+              className="flex items-center px-4 py-2 hover:bg-gray-100 dark:hover:bg-gray-800 rounded-lg transition-colors text-sm"
             >
               <Eye className="w-4 h-4 mr-2" />
               Preview
@@ -861,687 +822,747 @@ export default function DashboardBuilder() {
       </div>
 
       {/* Main Builder Area */}
-      <div className="flex-1 flex min-h-0">
-        {/* Left Sidebar - Data Sources & Columns */}
-        <div className="w-56 bg-white border-r border-gray-200 flex flex-col">
-          {/* Data Sources Section */}
-          <div className="border-b border-gray-200">
-            <div className="px-4 py-3 bg-indigo-50 border-b border-indigo-100">
-              <div className="flex items-center">
-                <Database className="w-5 h-5 text-indigo-600 mr-2" />
-                <span className="font-semibold text-gray-900">Data</span>
+      <div className="flex-1 min-h-0">
+        <PanelGroup direction="horizontal" className="h-full">
+          {/* Left Sidebar - Data Sources & Columns */}
+          <Panel defaultSize={22} minSize={16} maxSize={34}>
+            <div style={{ backgroundColor: colors.cardBg, borderColor: colors.cardBorder }} className="h-full border-r flex flex-col">
+              {/* Data Sources Section */}
+              <div style={{ borderColor: colors.cardBorder }} className="border-b">
+                <div
+                  className="px-4 py-3 border-b"
+                  style={{
+                    backgroundColor: isDark ? 'rgba(99, 102, 241, 0.10)' : 'rgba(99, 102, 241, 0.08)',
+                    borderColor: colors.cardBorder,
+                  }}
+                >
+                  <div className="flex items-center">
+                    <Database className="w-5 h-5 text-indigo-600 mr-2" />
+                    <span style={{ color: colors.text }} className="font-semibold">Data</span>
+                  </div>
+                </div>
+                <button
+                  onClick={() => setDataSourcesPanelExpanded(!dataSourcesPanelExpanded)}
+                  style={{ color: colors.text }}
+                  className="w-full px-4 py-3 flex items-center justify-between hover:bg-gray-50 dark:hover:bg-gray-800 transition-colors"
+                >
+                  <div className="flex items-center">
+                    <Database className="w-5 h-5 text-indigo-600 mr-2" />
+                    <span className="font-semibold">Data Sources</span>
+                  </div>
+                  {dataSourcesPanelExpanded ? (
+                    <ChevronDown className="w-4 h-4" style={{ color: colors.muted }} />
+                  ) : (
+                    <ChevronRight className="w-4 h-4" style={{ color: colors.muted }} />
+                  )}
+                </button>
+
+                {dataSourcesPanelExpanded && (
+                  <div style={{ borderColor: colors.cardBorder }} className="p-4 border-t max-h-64 overflow-y-auto">
+                    {loadingDatasets ? (
+                      <div className="flex items-center justify-center py-4">
+                        <Loader2 className="w-5 h-5 text-indigo-600 animate-spin" />
+                      </div>
+                    ) : datasets.length === 0 ? (
+                      <p style={{ color: colors.muted }} className="text-xs text-center py-4">No data sources available</p>
+                    ) : (
+                      <div className="space-y-2">
+                        {datasets.map((dataset) => (
+                          <div
+                            key={dataset.id}
+                            style={{
+                              backgroundColor: selectedDatasets.has(dataset.id) ? (isDark ? 'rgba(99, 102, 241, 0.2)' : '#eef2ff') : colors.cardBg,
+                              borderColor: selectedDatasets.has(dataset.id) ? '#6366f1' : colors.cardBorder
+                            }}
+                            className="p-2 border rounded cursor-pointer transition-colors"
+                            onClick={() => toggleDatasetSelection(dataset.id)}
+                          >
+                            <div className="flex items-center justify-between">
+                              <div className="flex-1 min-w-0">
+                                <p style={{ color: colors.text }} className="text-sm font-medium truncate">{dataset.name}</p>
+                                <p style={{ color: colors.muted }} className="text-xs">
+                                  {dataset.source_type.toUpperCase()} • {dataset.row_count?.toLocaleString() || 0} rows
+                                </p>
+                              </div>
+                              <input
+                                type="checkbox"
+                                checked={selectedDatasets.has(dataset.id)}
+                                onChange={() => toggleDatasetSelection(dataset.id)}
+                                onClick={(e) => e.stopPropagation()}
+                                className="ml-2 w-4 h-4 text-indigo-600 rounded focus:ring-indigo-500"
+                              />
+                            </div>
+                            {dataset.connection_status && (
+                              <div className="mt-1">
+                                <span className={`text-xs px-2 py-0.5 rounded ${dataset.connection_status === 'connected'
+                                  ? 'bg-green-100 text-green-700 dark:bg-green-900/30 dark:text-green-400'
+                                  : 'bg-red-100 text-red-700 dark:bg-red-900/30 dark:text-red-400'
+                                  }`}>
+                                  {dataset.connection_status}
+                                </span>
+                              </div>
+                            )}
+                          </div>
+                        ))}
+                      </div>
+                    )}
+                  </div>
+                )}
+              </div>
+
+              {/* Columns Section - Show columns from selected data sources */}
+              {selectedDatasets.size > 0 && (
+                <div style={{ borderColor: colors.cardBorder }} className="flex-1 overflow-y-auto border-b">
+                  <button
+                    onClick={() => setColumnsPanelExpanded(!columnsPanelExpanded)}
+                    style={{ color: colors.text }}
+                    className="w-full px-4 py-3 flex items-center justify-between hover:bg-gray-50 dark:hover:bg-gray-800 transition-colors"
+                  >
+                    <div className="flex items-center">
+                      <Hash className="w-5 h-5 text-indigo-600 mr-2" />
+                      <span className="font-semibold">Columns</span>
+                    </div>
+                    {columnsPanelExpanded ? (
+                      <ChevronDown className="w-4 h-4" style={{ color: colors.muted }} />
+                    ) : (
+                      <ChevronRight className="w-4 h-4" style={{ color: colors.muted }} />
+                    )}
+                  </button>
+
+                  {columnsPanelExpanded && (
+                    <div style={{ borderColor: colors.cardBorder }} className="p-4 border-t max-h-96 overflow-y-auto">
+                      <div className="mb-3">
+                        <input
+                          value={fieldSearch}
+                          onChange={(e) => setFieldSearch(e.target.value)}
+                          placeholder="Search fields..."
+                          style={{ backgroundColor: colors.inputBg, borderColor: colors.inputBorder, color: colors.text }}
+                          className="w-full px-3 py-2 text-sm border rounded-lg focus:ring-2 focus:ring-indigo-500 focus:border-transparent outline-none"
+                        />
+                      </div>
+                      {Array.from(selectedDatasets).map((datasetId) => {
+                        const dataset = datasets.find((d) => d.id === datasetId);
+                        const datasetColumns = (columns[datasetId] || []).filter((c) =>
+                          fieldSearch.trim()
+                            ? c.name.toLowerCase().includes(fieldSearch.trim().toLowerCase())
+                            : true
+                        );
+                        const isLoading = loadingData[datasetId];
+
+                        return (
+                          <div key={datasetId} className="mb-4 last:mb-0">
+                            <p style={{ color: colors.text }} className="text-xs font-medium mb-2">{dataset?.name}</p>
+                            {isLoading ? (
+                              <div className="flex items-center justify-center py-2">
+                                <Loader2 className="w-4 h-4 text-indigo-600 animate-spin" />
+                              </div>
+                            ) : datasetColumns.length === 0 ? (
+                              <p style={{ color: colors.muted }} className="text-xs">No columns available</p>
+                            ) : (
+                              <div className="space-y-1">
+                                {datasetColumns.map((col) => (
+                                  <div
+                                    key={col.name}
+                                    draggable
+                                    onDragStart={() => handleDragStart(datasetId as number, col.name)}
+                                    onDragEnd={handleDragEnd}
+                                    style={{
+                                      backgroundColor: colors.inputBg,
+                                      borderColor: colors.inputBorder,
+                                    }}
+                                    className="flex items-center gap-2 p-2 border rounded cursor-move hover:border-indigo-300 transition-colors"
+                                    onMouseEnter={(e) => {
+                                      (e.currentTarget as HTMLDivElement).style.backgroundColor = isDark
+                                        ? 'rgba(99, 102, 241, 0.12)'
+                                        : 'rgba(99, 102, 241, 0.08)';
+                                    }}
+                                    onMouseLeave={(e) => {
+                                      (e.currentTarget as HTMLDivElement).style.backgroundColor = colors.inputBg;
+                                    }}
+                                  >
+                                    <GripVertical className="w-4 h-4" style={{ color: colors.muted }} />
+                                    <span style={{ color: colors.text }} className="text-xs flex-1">{col.name}</span>
+                                    <span style={{ color: colors.muted }} className="text-xs">{col.type}</span>
+                                  </div>
+                                ))}
+                              </div>
+                            )}
+                          </div>
+                        );
+                      })}
+                    </div>
+                  )}
+                </div>
+              )}
+            </div>
+          </Panel>
+
+          <PanelResizeHandle className="w-1 bg-transparent hover:bg-indigo-500/30 transition-colors" />
+
+          {/* Main Canvas - Canva-like: zoom, pan, expandable stage */}
+          <Panel defaultSize={56} minSize={40}>
+            <div
+              ref={canvasRef}
+              className="h-full overflow-hidden relative"
+              style={{
+                backgroundColor: isDark ? '#0f0f14' : '#e5e7eb',
+                pointerEvents: (showPublishModal || showDetailsModal) ? 'none' : 'auto',
+                opacity: (showPublishModal || showDetailsModal) ? 0.3 : 1,
+                cursor: isPanning ? 'grabbing' : 'default',
+              }}
+            >
+              {/* Stage: large pannable/zoomable area */}
+              <div
+                style={{
+                  position: 'absolute',
+                  left: 0,
+                  top: 0,
+                  width: STAGE_WIDTH,
+                  height: STAGE_HEIGHT,
+                  transform: `translate(${pan.x}px, ${pan.y}px) scale(${zoom})`,
+                  transformOrigin: '0 0',
+                }}
+              >
+                {/* Background: dotted pattern, drag to pan, click to deselect */}
+                <div
+                  role="presentation"
+                  className="absolute inset-0"
+                  style={{
+                    backgroundImage: isDark
+                      ? 'radial-gradient(rgba(148, 163, 184, 0.14) 1px, transparent 1px)'
+                      : 'radial-gradient(rgba(107, 114, 128, 0.18) 1px, transparent 1px)',
+                    backgroundSize: '18px 18px',
+                    cursor: 'grab',
+                  }}
+                  onMouseDown={(e) => {
+                    if (showPublishModal || showDetailsModal) return;
+                    hasPannedRef.current = false;
+                    panStartRef.current = { x: e.clientX, y: e.clientY, offX: pan.x, offY: pan.y };
+                    setIsPanning(true);
+                  }}
+                />
+                {widgets.length === 0 ? (
+                  <div
+                    className="absolute flex items-center justify-center pointer-events-none"
+                    style={{ left: '50%', top: '50%', transform: 'translate(-50%, -50%)', width: '100%', height: '100%' }}
+                  >
+                    <div className="text-center">
+                      <div style={{ backgroundColor: isDark ? 'rgba(255,255,255,0.1)' : '#f3f4f6' }} className="p-6 rounded-full mb-4 inline-block">
+                        <BarChart3 className="w-16 h-16" style={{ color: colors.muted }} />
+                      </div>
+                      <h3 style={{ color: colors.text }} className="text-lg font-medium mb-2">Build Your Dashboard</h3>
+                      <p style={{ color: colors.muted }} className="mb-1">Click visualizations from the left panel to add</p>
+                      <p style={{ color: colors.muted }} className="text-sm">Scroll to zoom • Drag background to pan • Drag widgets to move • Resize with handles</p>
+                    </div>
+                  </div>
+                ) : (
+                  <>
+                    {widgets.map((widget) => (
+                      <Draggable
+                        key={widget.id}
+                        position={{ x: widget.position.x, y: widget.position.y }}
+                        onStop={(e, data) => {
+                          if (showPublishModal || showDetailsModal) return;
+                          const rx = Math.max(0, Math.min(STAGE_WIDTH - widget.size.width, snapToGrid(data.x)));
+                          const ry = Math.max(0, Math.min(STAGE_HEIGHT - widget.size.height, snapToGrid(data.y)));
+                          updateWidgetPosition(widget.id, rx, ry);
+                        }}
+                        handle=".drag-handle"
+                        grid={[GRID_SIZE, GRID_SIZE]}
+                        bounds={{ left: 0, top: 0, right: STAGE_WIDTH - widget.size.width, bottom: STAGE_HEIGHT - widget.size.height }}
+                        disabled={showPublishModal || showDetailsModal}
+                      >
+                        <div
+                          style={{
+                            position: 'absolute',
+                            zIndex: (showPublishModal || showDetailsModal) ? 0 : (selectedWidget === widget.id ? 1000 : 1),
+                            pointerEvents: (showPublishModal || showDetailsModal) ? 'none' : 'auto',
+                            opacity: (showPublishModal || showDetailsModal) ? 0.3 : 1,
+                          }}
+                        >
+                          <Resizable
+                            size={{ width: widget.size.width, height: widget.size.height }}
+                            onResizeStop={(e, direction, ref, d) => {
+                              const newWidth = snapToGrid(widget.size.width + d.width);
+                              const newHeight = snapToGrid(widget.size.height + d.height);
+
+                              // Update size
+                              updateWidgetSize(widget.id, {
+                                width: newWidth,
+                                height: newHeight
+                              });
+
+                              // Update position based on resize direction
+                              let newX = widget.position.x;
+                              let newY = widget.position.y;
+
+                              // If resizing from left side, move position left by the width delta
+                              if (direction.includes('left')) {
+                                newX = snapToGrid(widget.position.x - d.width);
+                              }
+
+                              // If resizing from top side, move position up by the height delta
+                              if (direction.includes('top')) {
+                                newY = snapToGrid(widget.position.y - d.height);
+                              }
+
+                              // Update position if it changed
+                              if (newX !== widget.position.x || newY !== widget.position.y) {
+                                updateWidgetPosition(widget.id, newX, newY);
+                              }
+                            }}
+                            minWidth={150}
+                            minHeight={120}
+                            enable={{
+                              top: true,
+                              right: true,
+                              bottom: true,
+                              left: true,
+                              topRight: true,
+                              topLeft: true,
+                              bottomRight: true,
+                              bottomLeft: true
+                            }}
+                            handleStyles={{
+                              top: {
+                                height: '6px',
+                                width: '30px',
+                                top: '-3px',
+                                left: '50%',
+                                transform: 'translateX(-50%)',
+                                background: selectedWidget === widget.id ? '#4f46e5' : 'transparent',
+                                cursor: 'ns-resize',
+                                zIndex: 20,
+                                borderRadius: '2px'
+                              },
+                              right: {
+                                width: '6px',
+                                height: '30px',
+                                right: '-3px',
+                                top: '50%',
+                                transform: 'translateY(-50%)',
+                                background: selectedWidget === widget.id ? '#4f46e5' : 'transparent',
+                                cursor: 'ew-resize',
+                                zIndex: 20,
+                                borderRadius: '2px'
+                              },
+                              bottom: {
+                                height: '6px',
+                                width: '30px',
+                                bottom: '-3px',
+                                left: '50%',
+                                transform: 'translateX(-50%)',
+                                background: selectedWidget === widget.id ? '#4f46e5' : 'transparent',
+                                cursor: 'ns-resize',
+                                zIndex: 20,
+                                borderRadius: '2px'
+                              },
+                              left: {
+                                width: '6px',
+                                height: '30px',
+                                left: '-3px',
+                                top: '50%',
+                                transform: 'translateY(-50%)',
+                                background: selectedWidget === widget.id ? '#4f46e5' : 'transparent',
+                                cursor: 'ew-resize',
+                                zIndex: 20,
+                                borderRadius: '2px'
+                              },
+                              topRight: {
+                                width: '10px',
+                                height: '10px',
+                                top: '-5px',
+                                right: '-5px',
+                                background: selectedWidget === widget.id ? '#4f46e5' : 'transparent',
+                                border: selectedWidget === widget.id ? '1px solid white' : 'none',
+                                cursor: 'nesw-resize',
+                                zIndex: 30,
+                                borderRadius: '2px'
+                              },
+                              topLeft: {
+                                width: '10px',
+                                height: '10px',
+                                top: '-5px',
+                                left: '-5px',
+                                background: selectedWidget === widget.id ? '#4f46e5' : 'transparent',
+                                border: selectedWidget === widget.id ? '1px solid white' : 'none',
+                                cursor: 'nwse-resize',
+                                zIndex: 30,
+                                borderRadius: '2px'
+                              },
+                              bottomRight: {
+                                width: '10px',
+                                height: '10px',
+                                bottom: '-5px',
+                                right: '-5px',
+                                background: selectedWidget === widget.id ? '#4f46e5' : 'transparent',
+                                border: selectedWidget === widget.id ? '1px solid white' : 'none',
+                                cursor: 'nwse-resize',
+                                zIndex: 30,
+                                borderRadius: '2px'
+                              },
+                              bottomLeft: {
+                                width: '10px',
+                                height: '10px',
+                                bottom: '-5px',
+                                left: '-5px',
+                                background: selectedWidget === widget.id ? '#4f46e5' : 'transparent',
+                                border: selectedWidget === widget.id ? '1px solid white' : 'none',
+                                cursor: 'nesw-resize',
+                                zIndex: 30,
+                                borderRadius: '2px'
+                              }
+                            }}
+                          >
+                            <div
+                              onClick={() => setSelectedWidget(widget.id)}
+                              className="h-full relative transition-all"
+                              style={{
+                                backgroundColor: colors.cardBg,
+                                boxShadow: selectedWidget === widget.id
+                                  ? '0 0 0 1.5px #6366f1, 0 10px 15px -3px rgba(0, 0, 0, 0.1)'
+                                  : colors.cardShadow,
+                                border: 'none',
+                                borderRadius: 12,
+                                overflow: 'hidden',
+                              }}
+                            >
+                              {/* Widget Header with Drag Handle */}
+                              <div
+                                style={{ backgroundColor: isDark ? 'rgba(255,255,255,0.05)' : '#f9fafb', borderColor: colors.cardBorder }}
+                                className="drag-handle flex items-center justify-between px-3 py-2 border-b cursor-move"
+                              >
+                                <div className="flex items-center">
+                                  <GripVertical className="w-4 h-4 mr-2" style={{ color: colors.muted }} />
+                                  <h4 style={{ color: colors.text }} className="font-medium text-sm">{widget.title}</h4>
+                                </div>
+                                <button
+                                  onClick={(e) => {
+                                    e.stopPropagation();
+                                    removeWidget(widget.id);
+                                  }}
+                                  className="p-1 hover:text-red-600 transition-colors"
+                                  style={{ color: colors.muted }}
+                                >
+                                  <X className="w-4 h-4" />
+                                </button>
+                              </div>
+
+                              {/* Widget Content */}
+                              <div className="h-[calc(100%-44px)] p-3">
+                                {renderWidget(widget)}
+                              </div>
+                            </div>
+                          </Resizable>
+                        </div>
+                      </Draggable>
+                    ))}
+                  </>
+                )}
+              </div>
+              {/* Zoom controls - fixed in viewport */}
+              <div
+                className="absolute bottom-4 right-4 z-50 flex items-center gap-1 rounded-lg border shadow-lg"
+                style={{
+                  backgroundColor: isDark ? 'rgba(30,41,59,0.95)' : 'rgba(255,255,255,0.95)',
+                  borderColor: colors.cardBorder,
+                }}
+              >
+                <button
+                  type="button"
+                  onClick={() => setZoom((z) => Math.max(0.15, z / 1.25))}
+                  className="p-2 hover:opacity-80 transition-opacity"
+                  style={{ color: colors.text }}
+                  title="Zoom out"
+                >
+                  <ZoomOut className="w-4 h-4" />
+                </button>
+                <button
+                  type="button"
+                  onClick={() => {
+                    const vw = viewportSize.w || 800;
+                    const vh = viewportSize.h || 600;
+                    const z = Math.min(2, Math.max(0.15, Math.min(vw / STAGE_WIDTH, vh / STAGE_HEIGHT) * 0.9));
+                    setZoom(z);
+                    setPan({ x: (vw - STAGE_WIDTH * z) / 2, y: (vh - STAGE_HEIGHT * z) / 2 });
+                  }}
+                  className="p-2 hover:opacity-80 transition-opacity"
+                  style={{ color: colors.text }}
+                  title="Fit to view"
+                >
+                  <Maximize2 className="w-4 h-4" />
+                </button>
+                <span style={{ color: colors.muted }} className="px-2 text-xs tabular-nums">{Math.round(zoom * 100)}%</span>
+                <button
+                  type="button"
+                  onClick={() => setZoom((z) => Math.min(2, z * 1.25))}
+                  className="p-2 hover:opacity-80 transition-opacity"
+                  style={{ color: colors.text }}
+                  title="Zoom in"
+                >
+                  <ZoomIn className="w-4 h-4" />
+                </button>
               </div>
             </div>
-            <button
-              onClick={() => setDataSourcesPanelExpanded(!dataSourcesPanelExpanded)}
-              className="w-full px-4 py-3 flex items-center justify-between hover:bg-gray-50 transition-colors"
-            >
-              <div className="flex items-center">
-                <Database className="w-5 h-5 text-indigo-600 mr-2" />
-                <span className="font-semibold text-gray-900">Data Sources</span>
-              </div>
-              {dataSourcesPanelExpanded ? (
-                <ChevronDown className="w-4 h-4 text-gray-500" />
-              ) : (
-                <ChevronRight className="w-4 h-4 text-gray-500" />
-              )}
-            </button>
-            
-            {dataSourcesPanelExpanded && (
-              <div className="p-4 border-t border-gray-100 max-h-64 overflow-y-auto">
-                {loadingDatasets ? (
-                  <div className="flex items-center justify-center py-4">
-                    <Loader2 className="w-5 h-5 text-indigo-600 animate-spin" />
+          </Panel>
+
+          <PanelResizeHandle className="w-1 bg-transparent hover:bg-indigo-500/30 transition-colors" />
+
+          {/* Right Sidebar - PowerBI-like Visualizations + Fields/Format */}
+          <Panel defaultSize={22} minSize={16} maxSize={34}>
+            <div style={{ backgroundColor: colors.cardBg, borderColor: colors.cardBorder }} className="h-full border-l flex flex-col">
+              <div
+                className="px-4 pt-3 pb-2 border-b"
+                style={{
+                  backgroundColor: isDark ? 'rgba(99, 102, 241, 0.10)' : 'rgba(99, 102, 241, 0.08)',
+                  borderColor: colors.cardBorder,
+                }}
+              >
+                <div className="flex items-center justify-between">
+                  <div className="flex items-center">
+                    <BarChart3 className="w-5 h-5 text-indigo-600 mr-2" />
+                    <span style={{ color: colors.text }} className="font-semibold">Visual</span>
                   </div>
-                ) : datasets.length === 0 ? (
-                  <p className="text-xs text-gray-500 text-center py-4">No data sources available</p>
-                ) : (
-                  <div className="space-y-2">
-                    {datasets.map((dataset) => (
-                      <div
-                        key={dataset.id}
-                        className={`p-2 border rounded cursor-pointer transition-colors ${
-                          selectedDatasets.has(dataset.id)
-                            ? 'border-indigo-500 bg-indigo-50'
-                            : 'border-gray-200 hover:border-gray-300'
-                        }`}
-                        onClick={() => toggleDatasetSelection(dataset.id)}
+                  <div className="flex items-center gap-1">
+                    {(['visualizations', 'fields', 'format'] as const).map((t) => (
+                      <button
+                        key={t}
+                        type="button"
+                        onClick={(e) => {
+                          e.stopPropagation();
+                          setRightTab(t);
+                          rightPanelScrollRef.current?.scrollTo(0, 0);
+                        }}
+                        className="px-2 py-1 rounded-md text-xs transition-colors"
+                        style={{
+                          color: colors.text,
+                          backgroundColor:
+                            rightTab === t ? (isDark ? 'rgba(99, 102, 241, 0.28)' : 'rgba(99, 102, 241, 0.14)') : (isDark ? 'rgba(15, 23, 42, 0.25)' : 'rgba(255,255,255,0.55)'),
+                          border: rightTab === t ? '1px solid rgba(99,102,241,0.55)' : '1px solid transparent',
+                        }}
                       >
-                        <div className="flex items-center justify-between">
-                          <div className="flex-1 min-w-0">
-                            <p className="text-sm font-medium text-gray-900 truncate">{dataset.name}</p>
-                            <p className="text-xs text-gray-500">
-                              {dataset.source_type.toUpperCase()} • {dataset.row_count?.toLocaleString() || 0} rows
-                            </p>
-                          </div>
-                          <input
-                            type="checkbox"
-                            checked={selectedDatasets.has(dataset.id)}
-                            onChange={() => toggleDatasetSelection(dataset.id)}
-                            onClick={(e) => e.stopPropagation()}
-                            className="ml-2 w-4 h-4 text-indigo-600 rounded focus:ring-indigo-500"
-                          />
-                        </div>
-                        {dataset.connection_status && (
-                          <div className="mt-1">
-                            <span className={`text-xs px-2 py-0.5 rounded ${
-                              dataset.connection_status === 'connected'
-                                ? 'bg-green-100 text-green-700'
-                                : 'bg-red-100 text-red-700'
-                            }`}>
-                              {dataset.connection_status}
-                            </span>
-                          </div>
-                        )}
-                      </div>
+                        {t === 'visualizations' ? 'Build' : t === 'fields' ? 'Fields' : 'Format'}
+                      </button>
                     ))}
                   </div>
-                )}
-              </div>
-            )}
-          </div>
-
-          {/* Columns Section - Show columns from selected data sources */}
-          {selectedDatasets.size > 0 && (
-            <div className="flex-1 overflow-y-auto border-b border-gray-200">
-              <button
-                onClick={() => setColumnsPanelExpanded(!columnsPanelExpanded)}
-                className="w-full px-4 py-3 flex items-center justify-between hover:bg-gray-50 transition-colors"
-              >
-                <div className="flex items-center">
-                  <Hash className="w-5 h-5 text-indigo-600 mr-2" />
-                  <span className="font-semibold text-gray-900">Columns</span>
                 </div>
-                {columnsPanelExpanded ? (
-                  <ChevronDown className="w-4 h-4 text-gray-500" />
-                ) : (
-                  <ChevronRight className="w-4 h-4 text-gray-500" />
+                <p style={{ color: colors.muted }} className="text-xs mt-2">
+                  {rightTab === 'visualizations'
+                    ? 'Add a visual (or change selected)'
+                    : rightTab === 'fields'
+                      ? 'Drag fields into buckets'
+                      : 'Style & aggregation'}
+                </p>
+              </div>
+
+              <div ref={rightPanelScrollRef} className="flex-1 overflow-y-auto">
+                {rightTab === 'visualizations' && (
+                  <div className="p-4">
+                    <div className="grid grid-cols-4 gap-2">
+                      {vizPanelTypes.map((viz) => (
+                        <button
+                          key={viz.type}
+                          onClick={() => addWidget(viz.type)}
+                          style={{
+                            backgroundColor: selectedWidgetData?.type === viz.type ? (isDark ? 'rgba(99, 102, 241, 0.2)' : '#eef2ff') : colors.cardBg,
+                            borderColor: selectedWidgetData?.type === viz.type ? '#6366f1' : colors.cardBorder
+                          }}
+                          className="flex flex-col items-center p-2 border rounded-lg hover:border-indigo-500 transition-all group"
+                          title={viz.label}
+                        >
+                          <viz.icon className={`w-6 h-6 ${viz.color} mb-1`} />
+                          <span style={{ color: colors.muted }} className="text-[9px] text-center leading-tight">
+                            {viz.label}
+                          </span>
+                        </button>
+                      ))}
+                    </div>
+                  </div>
                 )}
-              </button>
-              
-              {columnsPanelExpanded && (
-                <div className="p-4 border-t border-gray-100 max-h-96 overflow-y-auto">
-                  {Array.from(selectedDatasets).map((datasetId) => {
-                    const dataset = datasets.find((d) => d.id === datasetId);
-                    const datasetColumns = columns[datasetId] || [];
-                    const isLoading = loadingData[datasetId];
-                    
-                    return (
-                      <div key={datasetId} className="mb-4 last:mb-0">
-                        <p className="text-xs font-medium text-gray-700 mb-2">{dataset?.name}</p>
-                        {isLoading ? (
-                          <div className="flex items-center justify-center py-2">
-                            <Loader2 className="w-4 h-4 text-indigo-600 animate-spin" />
-                          </div>
-                        ) : datasetColumns.length === 0 ? (
-                          <p className="text-xs text-gray-500">No columns available</p>
-                        ) : (
-                          <div className="space-y-1">
-                            {datasetColumns.map((col) => (
-                              <div
-                                key={col.name}
-                                draggable
-                                onDragStart={() => handleDragStart(datasetId, col.name)}
-                                onDragEnd={handleDragEnd}
-                                className="flex items-center gap-2 p-2 bg-gray-50 border border-gray-200 rounded cursor-move hover:bg-indigo-50 hover:border-indigo-300 transition-colors"
+
+                {(rightTab === 'fields' || rightTab === 'format') && (
+                  <div style={{ borderColor: colors.cardBorder }} className="border-t p-4 space-y-4">
+                    {!selectedWidgetData ? (
+                      <div className="py-6 text-center">
+                        <p style={{ color: colors.muted }} className="text-xs">
+                          Select a visual on the canvas to configure.
+                        </p>
+                      </div>
+                    ) : (
+                      <>
+                        {rightTab === 'fields' && (
+                          <>
+                            {/* Dataset binding */}
+                            <div>
+                              <label style={{ color: colors.text }} className="block text-xs font-medium mb-1">Dataset</label>
+                              <select
+                                value={selectedWidgetData.datasetId || ''}
+                                onChange={(e) => updateWidget(selectedWidgetData.id, { datasetId: Number(e.target.value) || undefined })}
+                                style={{ backgroundColor: colors.inputBg, borderColor: colors.inputBorder, color: colors.text }}
+                                className="w-full px-3 py-2 text-sm border rounded-lg focus:ring-2 focus:ring-indigo-500 outline-none"
                               >
-                                <GripVertical className="w-4 h-4 text-gray-400" />
-                                <span className="text-xs text-gray-700 flex-1">{col.name}</span>
-                                <span className="text-xs text-gray-500">{col.type}</span>
+                                <option value="" style={{ backgroundColor: isDark ? '#1a1a2e' : '#ffffff', color: isDark ? '#f1f5f9' : '#1e293b' }}>
+                                  Select dataset...
+                                </option>
+                                {Array.from(selectedDatasets).map((datasetId) => {
+                                  const dataset = datasets.find((d) => d.id === datasetId);
+                                  return (
+                                    <option key={datasetId} value={datasetId} style={{ backgroundColor: isDark ? '#1a1a2e' : '#ffffff', color: isDark ? '#f1f5f9' : '#1e293b' }}>
+                                      {dataset?.name || `Dataset ${datasetId}`}
+                                    </option>
+                                  );
+                                })}
+                              </select>
+                              <p style={{ color: colors.muted }} className="text-[11px] mt-2">
+                                Drag fields from the left “Columns” panel into buckets below.
+                              </p>
+                            </div>
+
+                            {/* Validation errors (Power BI–like) */}
+                            {(() => {
+                              const errs = validateChartConfig(selectedWidgetData.type, {
+                                xAxis: selectedWidgetData.xAxis,
+                                yAxis: selectedWidgetData.yAxis,
+                                legend: selectedWidgetData.legend,
+                                field: selectedWidgetData.field,
+                                filterField: selectedWidgetData.filterField,
+                              });
+                              if (errs.length === 0) return null;
+                              return (
+                                <div className="rounded-lg px-3 py-2 text-xs" style={{ backgroundColor: isDark ? 'rgba(239,68,68,0.12)' : '#fef2f2', color: '#dc2626' }}>
+                                  {errs.map((e, i) => (
+                                    <p key={i}>{e}</p>
+                                  ))}
+                                </div>
+                              );
+                            })()}
+
+                            {/* Buckets */}
+                            {!['card', 'gauge', 'filter'].includes(selectedWidgetData.type) && (
+                              <>
+                                <BucketDropZone
+                                  label="X-axis"
+                                  value={selectedWidgetData.xAxis}
+                                  bucket="xAxis"
+                                  widgetId={selectedWidgetData.id}
+                                  hint="Drag category field here"
+                                  onClear={() => updateWidget(selectedWidgetData.id, { xAxis: undefined })}
+                                />
+                                <BucketDropZone
+                                  label="Values"
+                                  value={selectedWidgetData.yAxis || selectedWidgetData.field}
+                                  bucket="yAxis"
+                                  widgetId={selectedWidgetData.id}
+                                  hint="Drag numeric field here"
+                                  onClear={() => updateWidget(selectedWidgetData.id, { yAxis: undefined, field: undefined })}
+                                />
+                                <BucketDropZone
+                                  label="Legend"
+                                  value={selectedWidgetData.legend}
+                                  bucket="legend"
+                                  widgetId={selectedWidgetData.id}
+                                  hint="Optional: drag category field here"
+                                  onClear={() => updateWidget(selectedWidgetData.id, { legend: undefined })}
+                                />
+                              </>
+                            )}
+
+                            {selectedWidgetData.type === 'card' && (
+                              <BucketDropZone
+                                label="Field"
+                                value={selectedWidgetData.field}
+                                bucket="field"
+                                widgetId={selectedWidgetData.id}
+                                hint="Drag a field for KPI"
+                                onClear={() => updateWidget(selectedWidgetData.id, { field: undefined })}
+                              />
+                            )}
+
+                            {selectedWidgetData.type === 'filter' && (
+                              <BucketDropZone
+                                label="Filter field"
+                                value={selectedWidgetData.filterField}
+                                bucket="filterField"
+                                widgetId={selectedWidgetData.id}
+                                hint="Drag a field to filter other visuals"
+                                onClear={() => updateWidget(selectedWidgetData.id, { filterField: undefined, selectedFilters: [] })}
+                              />
+                            )}
+                          </>
+                        )}
+
+                        {rightTab === 'format' && (
+                          <>
+                            <div className="mb-1">
+                              <span style={{ color: colors.text }} className="text-xs font-semibold">Style & aggregation</span>
+                            </div>
+
+                            <div>
+                              <label style={{ color: colors.text }} className="block text-xs font-medium mb-1">Title</label>
+                              <input
+                                type="text"
+                                value={selectedWidgetData.title ?? ''}
+                                onChange={(e) => updateWidget(selectedWidgetData.id, { title: e.target.value })}
+                                placeholder="Chart title"
+                                style={{ backgroundColor: colors.inputBg, borderColor: colors.inputBorder, color: colors.text }}
+                                className="w-full px-3 py-2 text-sm border rounded-lg focus:ring-2 focus:ring-indigo-500 focus:border-transparent outline-none"
+                              />
+                            </div>
+
+                            {!['table', 'filter'].includes(selectedWidgetData.type) && (
+                              <div>
+                                <label style={{ color: colors.text }} className="block text-xs font-medium mb-1">Aggregation</label>
+                                <select
+                                  value={selectedWidgetData.aggregation || 'sum'}
+                                  onChange={(e) => updateWidget(selectedWidgetData.id, { aggregation: e.target.value as Widget['aggregation'] })}
+                                  style={{ backgroundColor: colors.inputBg, borderColor: colors.inputBorder, color: colors.text }}
+                                  className="w-full px-3 py-2 text-sm border rounded-lg focus:ring-2 focus:ring-indigo-500 outline-none"
+                                >
+                                  <option value="sum" style={{ backgroundColor: isDark ? '#1a1a2e' : '#ffffff', color: isDark ? '#f1f5f9' : '#1e293b' }}>Sum</option>
+                                  <option value="count" style={{ backgroundColor: isDark ? '#1a1a2e' : '#ffffff', color: isDark ? '#f1f5f9' : '#1e293b' }}>Count</option>
+                                  <option value="first" style={{ backgroundColor: isDark ? '#1a1a2e' : '#ffffff', color: isDark ? '#f1f5f9' : '#1e293b' }}>First</option>
+                                  <option value="last" style={{ backgroundColor: isDark ? '#1a1a2e' : '#ffffff', color: isDark ? '#f1f5f9' : '#1e293b' }}>Last</option>
+                                  <option value="percentage" style={{ backgroundColor: isDark ? '#1a1a2e' : '#ffffff', color: isDark ? '#f1f5f9' : '#1e293b' }}>Percentage</option>
+                                </select>
+                                <p style={{ color: colors.muted }} className="text-[11px] mt-2">
+                                  Charts aggregate Values by X-axis (and Legend when set).
+                                </p>
                               </div>
-                            ))}
-                          </div>
+                            )}
+
+                            <div>
+                              <label style={{ color: colors.text }} className="block text-xs font-medium mb-2">Accent color</label>
+                              <div className="flex flex-wrap gap-2">
+                                {COLORS.map((c) => {
+                                  const isSelected = (selectedWidgetData.accentColor || '#118DFF') === c;
+                                  return (
+                                    <button
+                                      key={c}
+                                      type="button"
+                                      onClick={() => updateWidget(selectedWidgetData.id, { accentColor: c })}
+                                      className="h-8 w-8 rounded-md border flex-shrink-0 transition-all"
+                                      style={{
+                                        backgroundColor: c,
+                                        borderColor: isSelected ? '#6366f1' : colors.cardBorder,
+                                        boxShadow: isSelected ? '0 0 0 2px rgba(99,102,241,0.35)' : 'none',
+                                      }}
+                                      title={c}
+                                      aria-label={`Accent color ${c}`}
+                                    />
+                                  );
+                                })}
+                              </div>
+                            </div>
+                          </>
                         )}
-                      </div>
-                    );
-                  })}
-                </div>
-              )}
-            </div>
-          )}
-        </div>
-
-        {/* Middle Sidebar - Visualizations & Configuration */}
-        <div className="w-80 bg-white border-r border-gray-200 flex flex-col">
-          <div className="px-4 py-3 bg-indigo-50 border-b border-indigo-100">
-            <div className="flex items-center">
-              <BarChart3 className="w-5 h-5 text-indigo-600 mr-2" />
-              <span className="font-semibold text-gray-900">Visuals</span>
-            </div>
-          </div>
-          <div className="flex-1 overflow-y-auto">
-            <div className="p-4">
-              <p className="text-xs text-gray-500 mb-3">Build visual</p>
-              
-              {/* Visualization Icons Grid */}
-              <div className="grid grid-cols-4 gap-2 mb-6">
-                {visualizationTypes.map((viz) => (
-                  <button
-                    key={viz.type}
-                    onClick={() => addWidget(viz.type)}
-                    className={`flex flex-col items-center p-2 border rounded hover:border-indigo-500 hover:bg-indigo-50 transition-all group ${
-                      selectedWidgetData?.type === viz.type
-                        ? 'border-indigo-500 bg-indigo-50'
-                        : 'border-gray-200'
-                    }`}
-                    title={viz.label}
-                  >
-                    <viz.icon className={`w-6 h-6 ${viz.color} mb-1`} />
-                    <span className="text-[9px] text-gray-600 text-center leading-tight">
-                      {viz.label}
-                    </span>
-                  </button>
-                ))}
-              </div>
-            </div>
-
-            {/* Configuration Panel - Show below visual icons when widget is selected */}
-            {selectedWidgetData && (
-              <div className="border-t border-gray-200 p-4 space-y-4">
-                {/* Title */}
-                <div>
-                  <label className="block text-xs font-medium text-gray-700 mb-1">Title</label>
-                  <input
-                    type="text"
-                    value={selectedWidgetData.title}
-                    onChange={(e) => updateWidget(selectedWidgetData.id, { title: e.target.value })}
-                    className="w-full px-3 py-2 text-sm border border-gray-300 rounded focus:ring-2 focus:ring-indigo-500 focus:border-transparent outline-none"
-                  />
-                </div>
-
-                {/* Card-specific Configuration */}
-                {selectedWidgetData.type === 'card' && (
-                  <>
-                    <div>
-                      <label className="block text-xs font-medium text-gray-700 mb-1">Field</label>
-                      {selectedDatasets.size > 0 ? (
-                        <select 
-                          value={selectedWidgetData.field || ''}
-                          onChange={(e) => {
-                            const datasetId = selectedDatasets.size > 0 ? Array.from(selectedDatasets)[0] : undefined;
-                            updateWidget(selectedWidgetData.id, { 
-                              field: e.target.value,
-                              datasetId: datasetId || selectedWidgetData.datasetId
-                            });
-                          }}
-                          className="w-full px-3 py-2 text-sm border border-gray-300 rounded focus:ring-2 focus:ring-indigo-500 outline-none"
-                        >
-                          <option value="">Select field...</option>
-                          {Array.from(selectedDatasets).map((datasetId) => {
-                            const dataset = datasets.find((d) => d.id === datasetId);
-                            const datasetColumns = columns[datasetId] || [];
-                            return (
-                              <optgroup key={datasetId} label={dataset?.name || `Dataset ${datasetId}`}>
-                                {datasetColumns.map((col) => (
-                                  <option key={col.name} value={col.name}>
-                                    {col.name} ({col.type})
-                                  </option>
-                                ))}
-                              </optgroup>
-                            );
-                          })}
-                        </select>
-                      ) : (
-                        <p className="text-xs text-gray-500">Select a data source first</p>
-                      )}
-                    </div>
-
-                    <div>
-                      <label className="block text-xs font-medium text-gray-700 mb-1">Aggregation</label>
-                      <select 
-                        value={selectedWidgetData.aggregation || 'count'}
-                        onChange={(e) => updateWidget(selectedWidgetData.id, { aggregation: e.target.value as Widget['aggregation'] })}
-                        className="w-full px-3 py-2 text-sm border border-gray-300 rounded focus:ring-2 focus:ring-indigo-500 outline-none"
-                      >
-                        <option value="count">Count</option>
-                        <option value="sum">Sum</option>
-                        <option value="first">First Value</option>
-                        <option value="last">Last Value</option>
-                        <option value="percentage">Percentage</option>
-                      </select>
-                    </div>
-                  </>
-                )}
-
-                {/* Filter-specific Configuration */}
-                {selectedWidgetData.type === 'filter' && (
-                  <div>
-                    <label className="block text-xs font-medium text-gray-700 mb-1">Filter Field</label>
-                    {selectedDatasets.size > 0 ? (
-                        <select 
-                          value={selectedWidgetData.filterField || ''}
-                          onChange={(e) => {
-                            const datasetId = selectedDatasets.size > 0 ? Array.from(selectedDatasets)[0] : undefined;
-                            updateWidget(selectedWidgetData.id, { 
-                              filterField: e.target.value, 
-                              selectedFilters: [],
-                              datasetId: datasetId || selectedWidgetData.datasetId
-                            });
-                          }}
-                          className="w-full px-3 py-2 text-sm border border-gray-300 rounded focus:ring-2 focus:ring-indigo-500 outline-none"
-                        >
-                          <option value="">Select field...</option>
-                          {Array.from(selectedDatasets).map((datasetId) => {
-                            const dataset = datasets.find((d) => d.id === datasetId);
-                            const datasetColumns = columns[datasetId] || [];
-                            return (
-                              <optgroup key={datasetId} label={dataset?.name || `Dataset ${datasetId}`}>
-                                {datasetColumns.map((col) => (
-                                  <option key={col.name} value={col.name}>
-                                    {col.name} ({col.type})
-                                  </option>
-                                ))}
-                              </optgroup>
-                            );
-                          })}
-                        </select>
-                      ) : (
-                        <p className="text-xs text-gray-500">Select a data source first</p>
-                      )}
-                    <p className="mt-2 text-xs text-gray-500">
-                      Shows unique values for filtering
-                    </p>
+                      </>
+                    )}
                   </div>
                 )}
-
-                {/* Chart Configuration */}
-                {!['card', 'gauge', 'filter'].includes(selectedWidgetData.type) && (
-                  <>
-                    <div>
-                      <label className="block text-xs font-medium text-gray-700 mb-1">Y-axis</label>
-                      <div
-                        onDragOver={(e) => {
-                          e.preventDefault();
-                          e.currentTarget.classList.add('border-indigo-500', 'bg-indigo-50');
-                        }}
-                        onDragLeave={(e) => {
-                          e.currentTarget.classList.remove('border-indigo-500', 'bg-indigo-50');
-                        }}
-                        onDrop={(e) => {
-                          e.preventDefault();
-                          e.currentTarget.classList.remove('border-indigo-500', 'bg-indigo-50');
-                          handleDrop('yAxis', selectedWidgetData.id);
-                        }}
-                        className="w-full px-3 py-2 text-sm border-2 border-dashed border-gray-300 rounded focus-within:border-indigo-500 focus-within:bg-indigo-50 transition-colors min-h-[38px] flex items-center"
-                      >
-                        {selectedWidgetData.yAxis ? (
-                          <span className="text-gray-900">{selectedWidgetData.yAxis}</span>
-                        ) : (
-                          <span className="text-gray-400">Drag column here or select...</span>
-                        )}
-                      </div>
-                      {selectedDatasets.size > 0 && (
-                        <select 
-                          value={selectedWidgetData.yAxis || ''}
-                          onChange={(e) => {
-                            const datasetId = selectedDatasets.size > 0 ? Array.from(selectedDatasets)[0] : undefined;
-                            updateWidget(selectedWidgetData.id, { 
-                              yAxis: e.target.value,
-                              datasetId: datasetId || selectedWidgetData.datasetId
-                            });
-                          }}
-                          className="w-full mt-2 px-3 py-2 text-sm border border-gray-300 rounded focus:ring-2 focus:ring-indigo-500 outline-none"
-                        >
-                          <option value="">Or select from dropdown...</option>
-                          {Array.from(selectedDatasets).map((datasetId) => {
-                            const dataset = datasets.find((d) => d.id === datasetId);
-                            const datasetColumns = columns[datasetId] || [];
-                            return (
-                              <optgroup key={datasetId} label={dataset?.name || `Dataset ${datasetId}`}>
-                                {datasetColumns.map((col) => (
-                                  <option key={col.name} value={col.name}>
-                                    {col.name} ({col.type})
-                                  </option>
-                                ))}
-                              </optgroup>
-                            );
-                          })}
-                        </select>
-                      )}
-                    </div>
-
-                    <div>
-                      <label className="block text-xs font-medium text-gray-700 mb-1">X-axis</label>
-                      <div
-                        onDragOver={(e) => {
-                          e.preventDefault();
-                          e.currentTarget.classList.add('border-indigo-500', 'bg-indigo-50');
-                        }}
-                        onDragLeave={(e) => {
-                          e.currentTarget.classList.remove('border-indigo-500', 'bg-indigo-50');
-                        }}
-                        onDrop={(e) => {
-                          e.preventDefault();
-                          e.currentTarget.classList.remove('border-indigo-500', 'bg-indigo-50');
-                          handleDrop('xAxis', selectedWidgetData.id);
-                        }}
-                        className="w-full px-3 py-2 text-sm border-2 border-dashed border-gray-300 rounded focus-within:border-indigo-500 focus-within:bg-indigo-50 transition-colors min-h-[38px] flex items-center"
-                      >
-                        {selectedWidgetData.xAxis ? (
-                          <span className="text-gray-900">{selectedWidgetData.xAxis}</span>
-                        ) : (
-                          <span className="text-gray-400">Drag column here or select...</span>
-                        )}
-                      </div>
-                      {selectedDatasets.size > 0 && (
-                        <select 
-                          value={selectedWidgetData.xAxis || ''}
-                          onChange={(e) => {
-                            const datasetId = selectedDatasets.size > 0 ? Array.from(selectedDatasets)[0] : undefined;
-                            updateWidget(selectedWidgetData.id, { 
-                              xAxis: e.target.value,
-                              datasetId: datasetId || selectedWidgetData.datasetId
-                            });
-                          }}
-                          className="w-full mt-2 px-3 py-2 text-sm border border-gray-300 rounded focus:ring-2 focus:ring-indigo-500 outline-none"
-                        >
-                          <option value="">Or select from dropdown...</option>
-                          {Array.from(selectedDatasets).map((datasetId) => {
-                            const dataset = datasets.find((d) => d.id === datasetId);
-                            const datasetColumns = columns[datasetId] || [];
-                            return (
-                              <optgroup key={datasetId} label={dataset?.name || `Dataset ${datasetId}`}>
-                                {datasetColumns.map((col) => (
-                                  <option key={col.name} value={col.name}>
-                                    {col.name} ({col.type})
-                                  </option>
-                                ))}
-                              </optgroup>
-                            );
-                          })}
-                        </select>
-                      )}
-                    </div>
-
-                    <div>
-                      <label className="block text-xs font-medium text-gray-700 mb-1">
-                        Legend (Categorical Field for Color)
-                      </label>
-                      <div
-                        onDragOver={(e) => {
-                          e.preventDefault();
-                          e.currentTarget.classList.add('border-indigo-500', 'bg-indigo-50');
-                        }}
-                        onDragLeave={(e) => {
-                          e.currentTarget.classList.remove('border-indigo-500', 'bg-indigo-50');
-                        }}
-                        onDrop={(e) => {
-                          e.preventDefault();
-                          e.currentTarget.classList.remove('border-indigo-500', 'bg-indigo-50');
-                          handleDrop('legend', selectedWidgetData.id);
-                        }}
-                        className="w-full px-3 py-2 text-sm border-2 border-dashed border-gray-300 rounded focus-within:border-indigo-500 focus-within:bg-indigo-50 transition-colors min-h-[38px] flex items-center"
-                      >
-                        {selectedWidgetData.legend ? (
-                          <span className="text-gray-900">{selectedWidgetData.legend}</span>
-                        ) : (
-                          <span className="text-gray-400">Drag column here or select...</span>
-                        )}
-                      </div>
-                      {selectedDatasets.size > 0 && (
-                        <select 
-                          value={selectedWidgetData.legend || ''}
-                          onChange={(e) => {
-                            const datasetId = selectedDatasets.size > 0 ? Array.from(selectedDatasets)[0] : undefined;
-                            updateWidget(selectedWidgetData.id, { 
-                              legend: e.target.value,
-                              datasetId: datasetId || selectedWidgetData.datasetId
-                            });
-                          }}
-                          className="w-full mt-2 px-3 py-2 text-sm border border-gray-300 rounded focus:ring-2 focus:ring-indigo-500 outline-none"
-                        >
-                          <option value="">Or select from dropdown...</option>
-                          {Array.from(selectedDatasets).map((datasetId) => {
-                            const dataset = datasets.find((d) => d.id === datasetId);
-                            const datasetColumns = columns[datasetId] || [];
-                            return (
-                              <optgroup key={datasetId} label={dataset?.name || `Dataset ${datasetId}`}>
-                                {datasetColumns.map((col) => (
-                                  <option key={col.name} value={col.name}>
-                                    {col.name} ({col.type})
-                                  </option>
-                                ))}
-                              </optgroup>
-                            );
-                          })}
-                        </select>
-                      )}
-                      <p className="mt-2 text-xs text-gray-500">
-                        Drag a column here or select from dropdown
-                      </p>
-                    </div>
-                  </>
-                )}
-              </div>
-            )}
-          </div>
-        </div>
-
-
-        {/* Main Canvas */}
-        <div
-          className="flex-1 p-6 overflow-auto bg-gray-50 relative"
-          style={{
-            pointerEvents: (showPublishModal || showDetailsModal) ? 'none' : 'auto',
-            opacity: (showPublishModal || showDetailsModal) ? 0.3 : 1,
-          }}
-          onClick={(e) => {
-            // Deselect widget when clicking on the canvas background
-            if (e.target === e.currentTarget && !showPublishModal && !showDetailsModal) {
-              setSelectedWidget(null);
-            }
-          }}
-        >
-          {widgets.length === 0 ? (
-            <div className="h-full flex items-center justify-center">
-              <div className="text-center">
-                <div className="bg-gray-100 p-6 rounded-full mb-4 inline-block">
-                  <BarChart3 className="w-16 h-16 text-gray-400" />
-                </div>
-                <h3 className="text-lg font-medium text-gray-900 mb-2">Build Your Dashboard</h3>
-                <p className="text-gray-600 mb-1">Click visualizations from the left panel to add</p>
-                <p className="text-sm text-gray-500">Drag widgets to position • Resize with corner/edge handles</p>
               </div>
             </div>
-          ) : (
-            <>
-              {widgets.map((widget) => (
-                <Draggable
-                  key={widget.id}
-                  position={{ x: widget.position.x, y: widget.position.y }}
-                  onStop={(e, data) => {
-                    if (!showPublishModal && !showDetailsModal) {
-                      updateWidgetPosition(widget.id, data.x, data.y);
-                    }
-                  }}
-                  handle=".drag-handle"
-                  grid={[1, 1]}
-                  bounds="parent"
-                  disabled={showPublishModal || showDetailsModal}
-                >
-                  <div
-                    style={{
-                      position: 'absolute',
-                      zIndex: (showPublishModal || showDetailsModal) ? 0 : (selectedWidget === widget.id ? 1000 : 1),
-                      pointerEvents: (showPublishModal || showDetailsModal) ? 'none' : 'auto',
-                      opacity: (showPublishModal || showDetailsModal) ? 0.3 : 1,
-                    }}
-                  >
-                    <Resizable
-                      size={{ width: widget.size.width, height: widget.size.height }}
-                      onResizeStop={(e, direction, ref, d) => {
-                        const newWidth = widget.size.width + d.width;
-                        const newHeight = widget.size.height + d.height;
-                        
-                        // Update size
-                        updateWidgetSize(widget.id, {
-                          width: newWidth,
-                          height: newHeight
-                        });
-                        
-                        // Update position based on resize direction
-                        let newX = widget.position.x;
-                        let newY = widget.position.y;
-                        
-                        // If resizing from left side, move position left by the width delta
-                        if (direction.includes('left')) {
-                          newX = widget.position.x - d.width;
-                        }
-                        
-                        // If resizing from top side, move position up by the height delta
-                        if (direction.includes('top')) {
-                          newY = widget.position.y - d.height;
-                        }
-                        
-                        // Update position if it changed
-                        if (newX !== widget.position.x || newY !== widget.position.y) {
-                          updateWidgetPosition(widget.id, newX, newY);
-                        }
-                      }}
-                      minWidth={150}
-                      minHeight={120}
-                      enable={{
-                        top: true,
-                        right: true,
-                        bottom: true,
-                        left: true,
-                        topRight: true,
-                        topLeft: true,
-                        bottomRight: true,
-                        bottomLeft: true
-                      }}
-                      handleStyles={{
-                        top: { 
-                          height: '6px',
-                          width: '30px',
-                          top: '-3px',
-                          left: '50%',
-                          transform: 'translateX(-50%)',
-                          background: selectedWidget === widget.id ? '#4f46e5' : 'transparent',
-                          cursor: 'ns-resize',
-                          zIndex: 20,
-                          borderRadius: '2px'
-                        },
-                        right: { 
-                          width: '6px',
-                          height: '30px',
-                          right: '-3px',
-                          top: '50%',
-                          transform: 'translateY(-50%)',
-                          background: selectedWidget === widget.id ? '#4f46e5' : 'transparent',
-                          cursor: 'ew-resize',
-                          zIndex: 20,
-                          borderRadius: '2px'
-                        },
-                        bottom: { 
-                          height: '6px',
-                          width: '30px',
-                          bottom: '-3px',
-                          left: '50%',
-                          transform: 'translateX(-50%)',
-                          background: selectedWidget === widget.id ? '#4f46e5' : 'transparent',
-                          cursor: 'ns-resize',
-                          zIndex: 20,
-                          borderRadius: '2px'
-                        },
-                        left: { 
-                          width: '6px',
-                          height: '30px',
-                          left: '-3px',
-                          top: '50%',
-                          transform: 'translateY(-50%)',
-                          background: selectedWidget === widget.id ? '#4f46e5' : 'transparent',
-                          cursor: 'ew-resize',
-                          zIndex: 20,
-                          borderRadius: '2px'
-                        },
-                        topRight: { 
-                          width: '10px', 
-                          height: '10px', 
-                          top: '-5px', 
-                          right: '-5px',
-                          background: selectedWidget === widget.id ? '#4f46e5' : 'transparent',
-                          border: selectedWidget === widget.id ? '1px solid white' : 'none',
-                          cursor: 'nesw-resize',
-                          zIndex: 30,
-                          borderRadius: '2px'
-                        },
-                        topLeft: { 
-                          width: '10px', 
-                          height: '10px', 
-                          top: '-5px', 
-                          left: '-5px',
-                          background: selectedWidget === widget.id ? '#4f46e5' : 'transparent',
-                          border: selectedWidget === widget.id ? '1px solid white' : 'none',
-                          cursor: 'nwse-resize',
-                          zIndex: 30,
-                          borderRadius: '2px'
-                        },
-                        bottomRight: { 
-                          width: '10px', 
-                          height: '10px', 
-                          bottom: '-5px', 
-                          right: '-5px',
-                          background: selectedWidget === widget.id ? '#4f46e5' : 'transparent',
-                          border: selectedWidget === widget.id ? '1px solid white' : 'none',
-                          cursor: 'nwse-resize',
-                          zIndex: 30,
-                          borderRadius: '2px'
-                        },
-                        bottomLeft: { 
-                          width: '10px', 
-                          height: '10px', 
-                          bottom: '-5px', 
-                          left: '-5px',
-                          background: selectedWidget === widget.id ? '#4f46e5' : 'transparent',
-                          border: selectedWidget === widget.id ? '1px solid white' : 'none',
-                          cursor: 'nesw-resize',
-                          zIndex: 30,
-                          borderRadius: '2px'
-                        }
-                      }}
-                    >
-                      <div
-                        onClick={() => setSelectedWidget(widget.id)}
-                        className={`bg-white h-full relative transition-all ${
-                          selectedWidget === widget.id ? 'shadow-lg' : 'hover:shadow-md'
-                        }`}
-                        style={{
-                          boxShadow: selectedWidget === widget.id 
-                            ? '0 0 0 1.5px #6366f1, 0 10px 15px -3px rgba(0, 0, 0, 0.1)' 
-                            : '0 1px 3px 0 rgba(0, 0, 0, 0.1)',
-                          border: 'none'
-                        }}
-                      >
-                        {/* Widget Header with Drag Handle */}
-                        <div className="drag-handle flex items-center justify-between px-3 py-2 border-b border-gray-100 cursor-move bg-gray-50">
-                          <div className="flex items-center">
-                            <GripVertical className="w-4 h-4 text-gray-400 mr-2" />
-                            <h4 className="font-medium text-gray-900 text-sm">{widget.title}</h4>
-                          </div>
-                          <button
-                            onClick={(e) => {
-                              e.stopPropagation();
-                              removeWidget(widget.id);
-                            }}
-                            className="p-1 text-gray-400 hover:text-red-600 transition-colors"
-                          >
-                            <X className="w-4 h-4" />
-                          </button>
-                        </div>
-                        
-                        {/* Widget Content */}
-                        <div className="h-[calc(100%-44px)] p-3">
-                          {renderWidget(widget)}
-                        </div>
-                      </div>
-                    </Resizable>
-                  </div>
-                </Draggable>
-              ))}
-            </>
-          )}
-        </div>
+          </Panel>
+        </PanelGroup>
       </div>
 
       {/* Dashboard Details Modal for New Dashboards */}

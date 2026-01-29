@@ -42,7 +42,7 @@ const upload = multer({
             'text/csv', // .csv
             'application/csv'
         ];
-        
+
         if (allowedTypes.includes(file.mimetype)) {
             cb(null, true);
         } else {
@@ -53,17 +53,17 @@ const upload = multer({
 
 // Routes - All authenticated users (admin, developer, viewer) can access data
 // No permission checks needed - all authenticated users can view/fetch data
-router.post('/upload', 
+router.post('/upload',
     upload.single('file'),
     auditLog('data.upload', 'dataset'),
     dataController.uploadExcel
 );
 
-router.get('/datasets', 
+router.get('/datasets',
     dataController.getDatasets
 );
 
-router.get('/datasets/:id', 
+router.get('/datasets/:id',
     dataController.getDatasetById
 );
 
@@ -72,13 +72,13 @@ router.put('/datasets/:id',
     dataController.updateDataset
 );
 
-router.delete('/datasets/:id', 
+router.delete('/datasets/:id',
     auditLog('data.delete', 'dataset'),
     dataController.deleteDataset
 );
 
 // Fetch API data - available to all authenticated users (admin, developer, viewer)
-router.post('/fetch-api', 
+router.post('/fetch-api',
     auditLog('data.fetch_api', 'dataset'),
     dataController.fetchApiData
 );
@@ -87,6 +87,16 @@ router.post('/fetch-api',
 router.post('/datasets/:id/refresh',
     auditLog('data.refresh', 'dataset'),
     dataController.refreshApiDataset
+);
+
+// Clear cache for a specific dataset
+router.post('/datasets/:id/clear-cache',
+    dataController.clearDataCache
+);
+
+// Clear all dataset caches
+router.post('/clear-cache',
+    dataController.clearDataCache
 );
 
 router.get('/used-api-configs',

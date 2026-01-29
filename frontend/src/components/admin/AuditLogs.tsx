@@ -8,6 +8,8 @@ import {
   Loader2,
 } from 'lucide-react';
 import { apiGet } from '../../lib/api';
+import { useTheme } from '../../contexts/ThemeContext';
+import { getThemeColors, getColorPalette } from '../../lib/themeColors';
 
 interface AuditLog {
   id: number;
@@ -31,6 +33,10 @@ interface AuditApiResponse {
 }
 
 export default function AuditLogs() {
+  const { isDark } = useTheme();
+  const colors = getThemeColors(isDark);
+  const palette = getColorPalette(isDark);
+
   const [logs, setLogs] = useState<AuditLog[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
@@ -132,14 +138,14 @@ export default function AuditLogs() {
   const failedCount = logs.filter((l) => getStatus(l) === 'failed').length;
 
   return (
-    <div className="space-y-6">
-      <div className="flex items-center justify-between">
+    <div style={{ display: 'flex', flexDirection: 'column', gap: '1.5rem' }}>
+      <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
         <div>
-          <h2 className="text-2xl font-semibold text-gray-900 mb-1">Audit Logs</h2>
-          <p className="text-gray-600">Track all system activities and changes</p>
+          <h2 style={{ fontSize: '1.5rem', fontWeight: 600, color: colors.text, marginBottom: '0.25rem' }}>Audit Logs</h2>
+          <p style={{ color: colors.muted }}>Track all system activities and changes</p>
         </div>
         <button
-          className="flex items-center px-4 py-2 bg-red-600 text-white rounded-lg hover:bg-red-700 transition-colors"
+          style={{ display: 'flex', alignItems: 'center', padding: '0.5rem 1rem', backgroundColor: '#dc2626', color: 'white', borderRadius: '0.5rem', border: 'none', cursor: 'pointer', transition: 'background-color 0.2s' }}
           title="Export (coming soon)"
         >
           <Download className="w-5 h-5 mr-2" />
@@ -148,20 +154,20 @@ export default function AuditLogs() {
       </div>
 
       {error && (
-        <div className="p-4 rounded-lg bg-red-50 text-red-700 text-sm">{error}</div>
+        <div style={{ padding: '1rem', borderRadius: '0.5rem', backgroundColor: palette.red.bg, color: palette.red.text, fontSize: '0.875rem' }}>{error}</div>
       )}
 
       {/* Filters */}
-      <div className="bg-white rounded-xl p-6 shadow-sm border border-gray-200">
-        <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-          <div className="md:col-span-2 relative">
-            <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-5 h-5 text-gray-400" />
+      <div style={{ backgroundColor: colors.cardBg, borderRadius: '0.75rem', padding: '1.5rem', boxShadow: colors.cardShadow, border: `1px solid ${colors.cardBorder}` }}>
+        <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)', gap: '1rem' }}>
+          <div style={{ gridColumn: 'span 2', position: 'relative' }}>
+            <Search style={{ position: 'absolute', left: '0.75rem', top: '50%', transform: 'translateY(-50%)', width: '1.25rem', height: '1.25rem', color: colors.muted }} />
             <input
               type="text"
               value={searchTerm}
               onChange={(e) => setSearchTerm(e.target.value)}
               placeholder="Search by user, action, or resource..."
-              className="w-full pl-10 pr-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-red-500 focus:border-transparent outline-none"
+              style={{ width: '100%', paddingLeft: '2.5rem', paddingRight: '1rem', paddingTop: '0.5rem', paddingBottom: '0.5rem', border: `1px solid ${colors.inputBorder}`, borderRadius: '0.5rem', outline: 'none', backgroundColor: colors.inputBg, color: colors.text }}
             />
           </div>
           <select
@@ -169,7 +175,7 @@ export default function AuditLogs() {
             onChange={(e) =>
               setFilterStatus(e.target.value as 'all' | 'success' | 'failed')
             }
-            className="px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-red-500 focus:border-transparent outline-none"
+            style={{ padding: '0.5rem 1rem', border: `1px solid ${colors.inputBorder}`, borderRadius: '0.5rem', outline: 'none', backgroundColor: colors.inputBg, color: colors.text }}
           >
             <option value="all">All Status</option>
             <option value="success">Success</option>
@@ -179,102 +185,103 @@ export default function AuditLogs() {
       </div>
 
       {/* Stats */}
-      <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
-        <div className="bg-white rounded-xl p-6 shadow-sm border border-gray-200">
-          <div className="flex items-center justify-between">
+      <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)', gap: '1.5rem' }}>
+        <div style={{ backgroundColor: colors.cardBg, borderRadius: '0.75rem', padding: '1.5rem', boxShadow: colors.cardShadow, border: `1px solid ${colors.cardBorder}` }}>
+          <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
             <div>
-              <p className="text-sm text-gray-600 mb-1">Total Events</p>
-              <p className="text-2xl font-bold text-gray-900">{logs.length}</p>
+              <p style={{ fontSize: '0.875rem', color: colors.muted, marginBottom: '0.25rem' }}>Total Events</p>
+              <p style={{ fontSize: '1.5rem', fontWeight: 700, color: colors.text }}>{logs.length}</p>
             </div>
-            <FileText className="w-8 h-8 text-gray-400" />
+            <FileText style={{ width: '2rem', height: '2rem', color: colors.muted }} />
           </div>
         </div>
-        <div className="bg-white rounded-xl p-6 shadow-sm border border-gray-200">
-          <div className="flex items-center justify-between">
+        <div style={{ backgroundColor: colors.cardBg, borderRadius: '0.75rem', padding: '1.5rem', boxShadow: colors.cardShadow, border: `1px solid ${colors.cardBorder}` }}>
+          <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
             <div>
-              <p className="text-sm text-gray-600 mb-1">Successful</p>
-              <p className="text-2xl font-bold text-green-600">{successCount}</p>
+              <p style={{ fontSize: '0.875rem', color: colors.muted, marginBottom: '0.25rem' }}>Successful</p>
+              <p style={{ fontSize: '1.5rem', fontWeight: 700, color: '#22c55e' }}>{successCount}</p>
             </div>
-            <CheckCircle className="w-8 h-8 text-green-400" />
+            <CheckCircle style={{ width: '2rem', height: '2rem', color: '#4ade80' }} />
           </div>
         </div>
-        <div className="bg-white rounded-xl p-6 shadow-sm border border-gray-200">
-          <div className="flex items-center justify-between">
+        <div style={{ backgroundColor: colors.cardBg, borderRadius: '0.75rem', padding: '1.5rem', boxShadow: colors.cardShadow, border: `1px solid ${colors.cardBorder}` }}>
+          <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
             <div>
-              <p className="text-sm text-gray-600 mb-1">Failed</p>
-              <p className="text-2xl font-bold text-red-600">{failedCount}</p>
+              <p style={{ fontSize: '0.875rem', color: colors.muted, marginBottom: '0.25rem' }}>Failed</p>
+              <p style={{ fontSize: '1.5rem', fontWeight: 700, color: '#ef4444' }}>{failedCount}</p>
             </div>
-            <XCircle className="w-8 h-8 text-red-400" />
+            <XCircle style={{ width: '2rem', height: '2rem', color: '#f87171' }} />
           </div>
         </div>
       </div>
 
       {/* Audit Log Table */}
-      <div className="bg-white rounded-xl shadow-sm border border-gray-200 overflow-hidden">
+      <div style={{ backgroundColor: colors.cardBg, borderRadius: '0.75rem', boxShadow: colors.cardShadow, border: `1px solid ${colors.cardBorder}`, overflow: 'hidden' }}>
         {loading ? (
-          <div className="p-12 flex justify-center">
+          <div style={{ padding: '3rem', display: 'flex', justifyContent: 'center' }}>
             <Loader2 className="w-8 h-8 text-red-500 animate-spin" />
           </div>
         ) : (
-          <div className="overflow-x-auto">
-            <table className="w-full">
-              <thead className="bg-gray-50 border-b border-gray-200">
+          <div style={{ overflowX: 'auto' }}>
+            <table style={{ width: '100%', borderCollapse: 'collapse' }}>
+              <thead style={{ backgroundColor: colors.tableBg, borderBottom: `1px solid ${colors.cardBorder}` }}>
                 <tr>
-                  <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                  <th style={{ padding: '0.75rem 1.5rem', textAlign: 'left', fontSize: '0.75rem', fontWeight: 500, color: colors.muted, textTransform: 'uppercase', letterSpacing: '0.05em' }}>
                     Timestamp
                   </th>
-                  <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                  <th style={{ padding: '0.75rem 1.5rem', textAlign: 'left', fontSize: '0.75rem', fontWeight: 500, color: colors.muted, textTransform: 'uppercase', letterSpacing: '0.05em' }}>
                     User
                   </th>
-                  <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                  <th style={{ padding: '0.75rem 1.5rem', textAlign: 'left', fontSize: '0.75rem', fontWeight: 500, color: colors.muted, textTransform: 'uppercase', letterSpacing: '0.05em' }}>
                     Action
                   </th>
-                  <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                  <th style={{ padding: '0.75rem 1.5rem', textAlign: 'left', fontSize: '0.75rem', fontWeight: 500, color: colors.muted, textTransform: 'uppercase', letterSpacing: '0.05em' }}>
                     Resource
                   </th>
-                  <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                  <th style={{ padding: '0.75rem 1.5rem', textAlign: 'left', fontSize: '0.75rem', fontWeight: 500, color: colors.muted, textTransform: 'uppercase', letterSpacing: '0.05em' }}>
                     Status
                   </th>
                 </tr>
               </thead>
-              <tbody className="divide-y divide-gray-200">
-                {filteredLogs.map((log) => {
+              <tbody>
+                {filteredLogs.map((log, index) => {
                   const status = getStatus(log);
+                  const statusColors = status === 'success' ? palette.green : palette.red;
                   return (
-                    <tr key={log.id} className="hover:bg-gray-50 transition-colors">
-                      <td className="px-6 py-4 text-sm text-gray-900 font-mono whitespace-nowrap">
+                    <tr key={log.id} style={{ borderBottom: index < filteredLogs.length - 1 ? `1px solid ${colors.cardBorder}` : 'none' }}>
+                      <td style={{ padding: '1rem 1.5rem', fontSize: '0.875rem', color: colors.text, fontFamily: 'monospace', whiteSpace: 'nowrap' }}>
                         {log.created_at
                           ? new Date(log.created_at).toLocaleString()
                           : '—'}
                       </td>
-                      <td className="px-6 py-4">
-                        <div className="flex items-center">
-                          <div className="w-8 h-8 rounded-full bg-gray-200 flex items-center justify-center">
-                            <span className="text-xs font-medium text-gray-600">
+                      <td style={{ padding: '1rem 1.5rem' }}>
+                        <div style={{ display: 'flex', alignItems: 'center' }}>
+                          <div style={{ width: '2rem', height: '2rem', borderRadius: '50%', backgroundColor: palette.gray.bg, display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+                            <span style={{ fontSize: '0.75rem', fontWeight: 500, color: colors.muted }}>
                               {userDisplay(log) === 'system'
                                 ? 'SYS'
                                 : userDisplay(log).charAt(0).toUpperCase()}
                             </span>
                           </div>
-                          <span className="ml-3 text-sm text-gray-900">
+                          <span style={{ marginLeft: '0.75rem', fontSize: '0.875rem', color: colors.text }}>
                             {userDisplay(log)}
                           </span>
                         </div>
                       </td>
-                      <td className="px-6 py-4 text-sm font-medium text-gray-900">
+                      <td style={{ padding: '1rem 1.5rem', fontSize: '0.875rem', fontWeight: 500, color: colors.text }}>
                         {log.action}
                       </td>
-                      <td className="px-6 py-4 text-sm text-gray-600">
+                      <td style={{ padding: '1rem 1.5rem', fontSize: '0.875rem', color: colors.muted }}>
                         {resourceDisplay(log)}
                       </td>
-                      <td className="px-6 py-4">
-                        <div className="flex items-center gap-2">
-                          {getStatusIcon(status)}
-                          <span
-                            className={`inline-flex px-2 py-1 text-xs font-medium rounded-full ${getStatusColor(
-                              status
-                            )}`}
-                          >
+                      <td style={{ padding: '1rem 1.5rem' }}>
+                        <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
+                          {status === 'success' ? (
+                            <CheckCircle style={{ width: '1.25rem', height: '1.25rem', color: '#22c55e' }} />
+                          ) : (
+                            <XCircle style={{ width: '1.25rem', height: '1.25rem', color: '#ef4444' }} />
+                          )}
+                          <span style={{ display: 'inline-flex', padding: '0.25rem 0.5rem', fontSize: '0.75rem', fontWeight: 500, borderRadius: '9999px', backgroundColor: statusColors.bg, color: statusColors.text }}>
                             {status === 'success' ? 'Success' : 'Failed'}
                           </span>
                         </div>
@@ -287,7 +294,7 @@ export default function AuditLogs() {
           </div>
         )}
         {!loading && filteredLogs.length === 0 && (
-          <div className="p-12 text-center text-gray-500">No audit logs found</div>
+          <div style={{ padding: '3rem', textAlign: 'center', color: colors.muted }}>No audit logs found</div>
         )}
       </div>
     </div>

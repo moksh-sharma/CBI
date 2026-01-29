@@ -2,6 +2,8 @@ import { useState } from 'react';
 import { useNavigate } from 'react-router';
 import { Eye, Mail, Lock, ArrowLeft } from 'lucide-react';
 import { useAuth } from '../../contexts/AuthContext';
+import { useTheme } from '../../contexts/ThemeContext';
+import { getThemeColors, getColorPalette } from '../../lib/themeColors';
 
 export default function ViewerLogin() {
   const [email, setEmail] = useState('');
@@ -9,6 +11,11 @@ export default function ViewerLogin() {
   const [error, setError] = useState('');
   const navigate = useNavigate();
   const { login, loading, error: authError, clearError } = useAuth();
+
+  // Theme support
+  const { isDark } = useTheme();
+  const colors = getThemeColors(isDark);
+  const palette = getColorPalette(isDark);
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -29,42 +36,90 @@ export default function ViewerLogin() {
   };
 
   return (
-    <div className="min-h-screen bg-gradient-to-br from-green-50 to-emerald-100 flex items-center justify-center p-6">
-      <div className="max-w-md w-full">
+    <div style={{
+      minHeight: '100vh',
+      background: isDark
+        ? 'linear-gradient(to bottom right, #0f0f1a, #1a1a2e)'
+        : 'linear-gradient(to bottom right, #ecfdf5, #d1fae5)',
+      display: 'flex',
+      alignItems: 'center',
+      justifyContent: 'center',
+      padding: '1.5rem'
+    }}>
+      <div style={{ maxWidth: '28rem', width: '100%' }}>
         <button
           onClick={() => navigate('/')}
-          className="mb-6 flex items-center text-gray-600 hover:text-gray-900 transition-colors"
+          style={{
+            marginBottom: '1.5rem',
+            display: 'flex',
+            alignItems: 'center',
+            color: colors.muted,
+            background: 'none',
+            border: 'none',
+            cursor: 'pointer'
+          }}
         >
           <ArrowLeft className="w-4 h-4 mr-2" />
           Back to Home
         </button>
 
-        <div className="bg-white rounded-2xl shadow-xl p-8">
-          <div className="text-center mb-8">
-            <div className="bg-green-100 w-16 h-16 rounded-xl flex items-center justify-center mx-auto mb-4">
-              <Eye className="w-8 h-8 text-green-600" />
+        <div style={{
+          backgroundColor: colors.cardBg,
+          borderRadius: '1rem',
+          boxShadow: colors.cardShadow,
+          padding: '2rem'
+        }}>
+          <div style={{ textAlign: 'center', marginBottom: '2rem' }}>
+            <div style={{
+              backgroundColor: `${palette.green}20`,
+              width: '4rem',
+              height: '4rem',
+              borderRadius: '0.75rem',
+              display: 'flex',
+              alignItems: 'center',
+              justifyContent: 'center',
+              margin: '0 auto 1rem'
+            }}>
+              <Eye className="w-8 h-8" style={{ color: palette.green }} />
             </div>
-            <h1 className="text-3xl font-bold text-gray-900 mb-2">Viewer Portal</h1>
-            <p className="text-gray-600">Access your dashboards</p>
+            <h1 style={{ fontSize: '1.875rem', fontWeight: 700, color: colors.text, marginBottom: '0.5rem' }}>Viewer Portal</h1>
+            <p style={{ color: colors.muted }}>Access your dashboards</p>
           </div>
 
-          <form onSubmit={handleSubmit} className="space-y-6">
+          <form onSubmit={handleSubmit} style={{ display: 'flex', flexDirection: 'column', gap: '1.5rem' }}>
             {(error || authError) && (
-              <div className="p-3 rounded-lg bg-red-50 text-red-700 text-sm">
+              <div style={{
+                padding: '0.75rem',
+                borderRadius: '0.5rem',
+                backgroundColor: `${palette.red}20`,
+                color: palette.red,
+                fontSize: '0.875rem'
+              }}>
                 {error || authError}
               </div>
             )}
             <div>
-              <label className="block text-sm font-medium text-gray-700 mb-2">
+              <label style={{ display: 'block', fontSize: '0.875rem', fontWeight: 500, color: colors.text, marginBottom: '0.5rem' }}>
                 Email Address
               </label>
-              <div className="relative">
-                <Mail className="absolute left-3 top-1/2 -translate-y-1/2 w-5 h-5 text-gray-400" />
+              <div style={{ position: 'relative' }}>
+                <Mail className="absolute left-3 top-1/2 -translate-y-1/2 w-5 h-5" style={{ color: colors.muted }} />
                 <input
                   type="email"
                   value={email}
                   onChange={(e) => setEmail(e.target.value)}
-                  className="w-full pl-11 pr-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-green-500 focus:border-transparent outline-none transition-all"
+                  style={{
+                    width: '100%',
+                    paddingLeft: '2.75rem',
+                    paddingRight: '1rem',
+                    paddingTop: '0.75rem',
+                    paddingBottom: '0.75rem',
+                    backgroundColor: colors.inputBg,
+                    color: colors.text,
+                    border: `1px solid ${colors.inputBorder}`,
+                    borderRadius: '0.5rem',
+                    outline: 'none'
+                  }}
                   placeholder="viewer@company.com"
                   required
                 />
@@ -72,28 +127,39 @@ export default function ViewerLogin() {
             </div>
 
             <div>
-              <label className="block text-sm font-medium text-gray-700 mb-2">
+              <label style={{ display: 'block', fontSize: '0.875rem', fontWeight: 500, color: colors.text, marginBottom: '0.5rem' }}>
                 Password
               </label>
-              <div className="relative">
-                <Lock className="absolute left-3 top-1/2 -translate-y-1/2 w-5 h-5 text-gray-400" />
+              <div style={{ position: 'relative' }}>
+                <Lock className="absolute left-3 top-1/2 -translate-y-1/2 w-5 h-5" style={{ color: colors.muted }} />
                 <input
                   type="password"
                   value={password}
                   onChange={(e) => setPassword(e.target.value)}
-                  className="w-full pl-11 pr-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-green-500 focus:border-transparent outline-none transition-all"
+                  style={{
+                    width: '100%',
+                    paddingLeft: '2.75rem',
+                    paddingRight: '1rem',
+                    paddingTop: '0.75rem',
+                    paddingBottom: '0.75rem',
+                    backgroundColor: colors.inputBg,
+                    color: colors.text,
+                    border: `1px solid ${colors.inputBorder}`,
+                    borderRadius: '0.5rem',
+                    outline: 'none'
+                  }}
                   placeholder="••••••••"
                   required
                 />
               </div>
             </div>
 
-            <div className="flex items-center justify-between">
-              <label className="flex items-center">
-                <input type="checkbox" className="rounded border-gray-300 text-green-600 focus:ring-green-500" />
-                <span className="ml-2 text-sm text-gray-600">Remember me</span>
+            <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
+              <label style={{ display: 'flex', alignItems: 'center' }}>
+                <input type="checkbox" style={{ borderRadius: '0.25rem' }} />
+                <span style={{ marginLeft: '0.5rem', fontSize: '0.875rem', color: colors.muted }}>Remember me</span>
               </label>
-              <a href="#" className="text-sm text-green-600 hover:text-green-700">
+              <a href="#" style={{ fontSize: '0.875rem', color: palette.green, textDecoration: 'none' }}>
                 Forgot password?
               </a>
             </div>
@@ -101,7 +167,17 @@ export default function ViewerLogin() {
             <button
               type="submit"
               disabled={loading}
-              className="w-full bg-green-600 text-white py-3 rounded-lg font-medium hover:bg-green-700 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
+              style={{
+                width: '100%',
+                backgroundColor: '#16a34a',
+                color: 'white',
+                padding: '0.75rem',
+                borderRadius: '0.5rem',
+                fontWeight: 500,
+                border: 'none',
+                cursor: 'pointer',
+                opacity: loading ? 0.5 : 1
+              }}
             >
               {loading ? 'Signing in...' : 'Sign In'}
             </button>

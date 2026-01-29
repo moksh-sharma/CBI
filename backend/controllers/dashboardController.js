@@ -12,7 +12,7 @@ const pool = require('../database/db');
 const getDashboards = async (req, res) => {
     try {
         let dashboards;
-        
+
         // Admin and Developer can see all dashboards
         if (['admin', 'developer'].includes(req.user.role_name)) {
             [dashboards] = await pool.query(
@@ -35,7 +35,7 @@ const getDashboards = async (req, res) => {
                 [req.user.id]
             );
         }
-        
+
         res.json({ success: true, data: dashboards });
     } catch (error) {
         console.error('Get dashboards error:', error);
@@ -49,11 +49,11 @@ const getDashboards = async (req, res) => {
 const getDashboardById = async (req, res) => {
     try {
         const { id } = req.params;
-        
+
         // Check if user has access
         let hasAccess = false;
         let permissionType = null;
-        
+
         if (['admin', 'developer'].includes(req.user.role_name)) {
             hasAccess = true;
         } else {
@@ -67,14 +67,14 @@ const getDashboardById = async (req, res) => {
                 permissionType = assignments[0].permission_type;
             }
         }
-        
+
         if (!hasAccess) {
-            return res.status(403).json({ 
-                success: false, 
-                message: 'Access denied. Dashboard not assigned to you.' 
+            return res.status(403).json({
+                success: false,
+                message: 'Access denied. Dashboard not assigned to you.'
             });
         }
-        
+
         const [dashboards] = await pool.query(
             `SELECT d.*, u.email as created_by_email
              FROM dashboards d
@@ -82,21 +82,21 @@ const getDashboardById = async (req, res) => {
              WHERE d.id = ? AND d.is_active = TRUE`,
             [id]
         );
-        
+
         if (dashboards.length === 0) {
-            return res.status(404).json({ 
-                success: false, 
-                message: 'Dashboard not found' 
+            return res.status(404).json({
+                success: false,
+                message: 'Dashboard not found'
             });
         }
-        
+
         const dashboard = dashboards[0];
-        
+
         // Add permission info for viewers
         if (permissionType) {
             dashboard.permission_type = permissionType;
         }
-        
+
         res.json({ success: true, data: dashboard });
     } catch (error) {
         console.error('Get dashboard error:', error);
@@ -111,32 +111,33 @@ const createDashboard = async (req, res) => {
     try {
         const errors = validationResult(req);
         if (!errors.isEmpty()) {
-            return res.status(400).json({ 
-                success: false, 
-                message: 'Validation failed', 
-                errors: errors.array() 
+            return res.status(400).json({
+                success: false,
+                message: 'Validation failed',
+                errors: errors.array()
             });
         }
-        
+
         const { name, description, config } = req.body;
-        
+
         // Validate config is valid JSON
         let dashboardConfig;
         try {
             dashboardConfig = typeof config === 'string' ? JSON.parse(config) : config;
         } catch (e) {
-            return res.status(400).json({ 
-                success: false, 
-                message: 'Invalid dashboard configuration JSON' 
+            return res.status(400).json({
+                success: false,
+                message: 'Invalid dashboard configuration JSON'
             });
         }
-        
+        // Config schema: { configVersion?: number, widgets: chart config[], selectedDatasets?: number[], category?: string }
+
         const [result] = await pool.query(
             `INSERT INTO dashboards (name, description, config, created_by) 
              VALUES (?, ?, ?, ?)`,
             [name, description || null, JSON.stringify(dashboardConfig), req.user.id]
         );
-        
+
         // Fetch created dashboard
         const [dashboards] = await pool.query(
             `SELECT d.*, u.email as created_by_email
@@ -145,12 +146,12 @@ const createDashboard = async (req, res) => {
              WHERE d.id = ?`,
             [result.insertId]
         );
-        
+
         // Emit real-time update via Socket.IO
         if (req.app.locals.emitDashboardUpdate) {
             req.app.locals.emitDashboardUpdate(result.insertId, dashboards[0]);
         }
-        
+
         res.status(201).json({
             success: true,
             message: 'Dashboard created successfully',
@@ -169,19 +170,19 @@ const updateDashboard = async (req, res) => {
     try {
         const errors = validationResult(req);
         if (!errors.isEmpty()) {
-            return res.status(400).json({ 
-                success: false, 
-                message: 'Validation failed', 
-                errors: errors.array() 
+            return res.status(400).json({
+                success: false,
+                message: 'Validation failed',
+                errors: errors.array()
             });
         }
-        
+
         const { id } = req.params;
         const { name, description, config } = req.body;
-        
+
         // Check if user can edit
         let canEdit = false;
-        
+
         if (['admin', 'developer'].includes(req.user.role_name)) {
             canEdit = true;
         } else {
@@ -194,55 +195,55 @@ const updateDashboard = async (req, res) => {
                 canEdit = true;
             }
         }
-        
+
         if (!canEdit) {
-            return res.status(403).json({ 
-                success: false, 
-                message: 'Access denied. You do not have permission to edit this dashboard.' 
+            return res.status(403).json({
+                success: false,
+                message: 'Access denied. You do not have permission to edit this dashboard.'
             });
         }
-        
+
         const updates = [];
         const values = [];
-        
+
         if (name) {
             updates.push('name = ?');
             values.push(name);
         }
-        
+
         if (description !== undefined) {
             updates.push('description = ?');
             values.push(description);
         }
-        
+
         if (config) {
             let dashboardConfig;
             try {
                 dashboardConfig = typeof config === 'string' ? JSON.parse(config) : config;
             } catch (e) {
-                return res.status(400).json({ 
-                    success: false, 
-                    message: 'Invalid dashboard configuration JSON' 
+                return res.status(400).json({
+                    success: false,
+                    message: 'Invalid dashboard configuration JSON'
                 });
             }
             updates.push('config = ?');
             values.push(JSON.stringify(dashboardConfig));
         }
-        
+
         if (updates.length === 0) {
-            return res.status(400).json({ 
-                success: false, 
-                message: 'No fields to update' 
+            return res.status(400).json({
+                success: false,
+                message: 'No fields to update'
             });
         }
-        
+
         values.push(id);
-        
+
         await pool.query(
             `UPDATE dashboards SET ${updates.join(', ')}, updated_at = CURRENT_TIMESTAMP WHERE id = ?`,
             values
         );
-        
+
         // Fetch updated dashboard
         const [dashboards] = await pool.query(
             `SELECT d.*, u.email as created_by_email
@@ -251,12 +252,12 @@ const updateDashboard = async (req, res) => {
              WHERE d.id = ?`,
             [id]
         );
-        
+
         // Emit real-time update via Socket.IO
         if (req.app.locals.emitDashboardUpdate) {
             req.app.locals.emitDashboardUpdate(id, dashboards[0]);
         }
-        
+
         res.json({
             success: true,
             message: 'Dashboard updated successfully',
@@ -274,21 +275,21 @@ const updateDashboard = async (req, res) => {
 const deleteDashboard = async (req, res) => {
     try {
         const { id } = req.params;
-        
+
         // Only admin and developer can delete
         if (!['admin', 'developer'].includes(req.user.role_name)) {
-            return res.status(403).json({ 
-                success: false, 
-                message: 'Access denied' 
+            return res.status(403).json({
+                success: false,
+                message: 'Access denied'
             });
         }
-        
+
         // Soft delete
         await pool.query(
             'UPDATE dashboards SET is_active = FALSE WHERE id = ?',
             [id]
         );
-        
+
         res.json({
             success: true,
             message: 'Dashboard deleted successfully'
@@ -306,40 +307,40 @@ const assignDashboard = async (req, res) => {
     try {
         const dashboard_id = req.params.id;
         const { user_id, permission_type } = req.body;
-        
+
         if (!['view', 'edit'].includes(permission_type)) {
-            return res.status(400).json({ 
-                success: false, 
-                message: 'Invalid permission type. Must be "view" or "edit"' 
+            return res.status(400).json({
+                success: false,
+                message: 'Invalid permission type. Must be "view" or "edit"'
             });
         }
-        
+
         // Check if dashboard exists
         const [dashboards] = await pool.query(
             'SELECT id FROM dashboards WHERE id = ? AND is_active = TRUE',
             [dashboard_id]
         );
-        
+
         if (dashboards.length === 0) {
-            return res.status(404).json({ 
-                success: false, 
-                message: 'Dashboard not found' 
+            return res.status(404).json({
+                success: false,
+                message: 'Dashboard not found'
             });
         }
-        
+
         // Check if user exists
         const [users] = await pool.query(
             'SELECT id FROM users WHERE id = ? AND is_active = TRUE',
             [user_id]
         );
-        
+
         if (users.length === 0) {
-            return res.status(404).json({ 
-                success: false, 
-                message: 'User not found' 
+            return res.status(404).json({
+                success: false,
+                message: 'User not found'
             });
         }
-        
+
         // Insert or update assignment
         await pool.query(
             `INSERT INTO dashboard_assignments (dashboard_id, user_id, permission_type, assigned_by) 
@@ -347,7 +348,7 @@ const assignDashboard = async (req, res) => {
              ON DUPLICATE KEY UPDATE permission_type = ?, assigned_by = ?`,
             [dashboard_id, user_id, permission_type, req.user.id, permission_type, req.user.id]
         );
-        
+
         res.json({
             success: true,
             message: 'Dashboard assigned successfully'
@@ -364,7 +365,7 @@ const assignDashboard = async (req, res) => {
 const getDashboardAssignments = async (req, res) => {
     try {
         const { id } = req.params;
-        
+
         const [assignments] = await pool.query(
             `SELECT da.*, u.email as user_email, u.first_name, u.last_name, 
              a.email as assigned_by_email
@@ -374,7 +375,7 @@ const getDashboardAssignments = async (req, res) => {
              WHERE da.dashboard_id = ?`,
             [id]
         );
-        
+
         res.json({ success: true, data: assignments });
     } catch (error) {
         console.error('Get assignments error:', error);
