@@ -15,6 +15,8 @@ import APIConfigModal from './APIConfigModal';
 import ZohoAPIModal from './ZohoAPIModal';
 import FileUploadModal from './FileUploadModal';
 import EditDatasetModal from './EditDatasetModal';
+import { useTheme } from '../../contexts/ThemeContext';
+import { getThemeColors, getColorPalette } from '../../lib/themeColors';
 
 interface Dataset {
   id: number;
@@ -60,6 +62,10 @@ interface DataSourceItem {
 }
 
 export default function DataSourceManagement() {
+  const { isDark } = useTheme();
+  const colors = getThemeColors(isDark);
+  const palette = getColorPalette(isDark);
+
   const [dataSources, setDataSources] = useState<DataSourceItem[]>([]);
   const [loading, setLoading] = useState(true);
   // Removed global error state - errors shown only per data source
@@ -217,7 +223,7 @@ export default function DataSourceManagement() {
 
   const handleSaveDataset = async (name: string, description: string) => {
     if (!editingDataset) return;
-    
+
     try {
       const res = await apiPut<Dataset>(`/api/data/datasets/${editingDataset.id}`, {
         name,
@@ -274,12 +280,12 @@ export default function DataSourceManagement() {
             prev.map((d) =>
               d.id === source.id
                 ? {
-                    ...d,
-                    connection_status: statusData.status || (res.success ? 'connected' : 'error'),
-                    row_count: statusData.row_count ?? d.row_count,
-                    updated_at: statusData.last_refreshed || d.updated_at,
-                    last_error: statusData.error || (res.success ? undefined : res.message),
-                  }
+                  ...d,
+                  connection_status: statusData.status || (res.success ? 'connected' : 'error'),
+                  row_count: statusData.row_count ?? d.row_count,
+                  updated_at: statusData.last_refreshed || d.updated_at,
+                  last_error: statusData.error || (res.success ? undefined : res.message),
+                }
                 : d
             )
           );
@@ -290,10 +296,10 @@ export default function DataSourceManagement() {
             prev.map((d) =>
               d.id === source.id
                 ? {
-                    ...d,
-                    connection_status: res.success ? 'connected' : 'error',
-                    last_error: res.success ? undefined : res.message || 'Refresh failed',
-                  }
+                  ...d,
+                  connection_status: res.success ? 'connected' : 'error',
+                  last_error: res.success ? undefined : res.message || 'Refresh failed',
+                }
                 : d
             )
           );
@@ -314,10 +320,10 @@ export default function DataSourceManagement() {
         prev.map((d) =>
           d.id === source.id
             ? {
-                ...d,
-                connection_status: 'error',
-                last_error: errorMsg,
-              }
+              ...d,
+              connection_status: 'error',
+              last_error: errorMsg,
+            }
             : d
         )
       );
@@ -373,7 +379,7 @@ export default function DataSourceManagement() {
 
   const handleBulkDelete = async () => {
     if (selectedSources.size === 0) return;
-    
+
     const count = selectedSources.size;
     if (!window.confirm(`Delete ${count} selected data source(s)? This cannot be undone.`)) return;
 
@@ -459,63 +465,69 @@ export default function DataSourceManagement() {
   };
 
   return (
-    <div className="space-y-6">
-      <div className="flex items-center justify-between">
+    <div style={{ display: 'flex', flexDirection: 'column', gap: '1.5rem' }}>
+      <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
         <div>
-          <h2 className="text-2xl font-semibold text-gray-900 mb-1">Data Source Management</h2>
-          <p className="text-gray-600">Connect and manage your data sources</p>
+          <h2 style={{ fontSize: '1.5rem', fontWeight: 600, color: colors.text, marginBottom: '0.25rem' }}>Data Source Management</h2>
+          <p style={{ color: colors.muted }}>Connect and manage your data sources</p>
         </div>
       </div>
 
       {/* Global errors removed - errors shown only below data source names */}
 
       {/* Connection Options */}
-      <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+      <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)', gap: '1rem' }}>
         <button
           onClick={() => setShowZohoModal(true)}
-          className="bg-white rounded-xl p-6 shadow-sm border-2 border-gray-200 hover:border-purple-500 transition-all text-left group"
+          style={{ backgroundColor: colors.cardBg, borderRadius: '0.75rem', padding: '1.5rem', boxShadow: colors.cardShadow, border: `2px solid ${colors.cardBorder}`, textAlign: 'left', cursor: 'pointer', transition: 'border-color 0.2s' }}
+          onMouseOver={(e) => e.currentTarget.style.borderColor = '#a855f7'}
+          onMouseOut={(e) => e.currentTarget.style.borderColor = colors.cardBorder}
         >
-          <div className="bg-purple-100 w-12 h-12 rounded-lg flex items-center justify-center mb-4 group-hover:bg-purple-200 transition-colors">
-            <Database className="w-6 h-6 text-purple-600" />
+          <div style={{ backgroundColor: palette.purple.bg, width: '3rem', height: '3rem', borderRadius: '0.5rem', display: 'flex', alignItems: 'center', justifyContent: 'center', marginBottom: '1rem' }}>
+            <Database style={{ width: '1.5rem', height: '1.5rem', color: palette.purple.text }} />
           </div>
-          <h3 className="font-semibold text-gray-900 mb-1">Connect Zoho API</h3>
-          <p className="text-sm text-gray-600">Integrate with Zoho CRM, Books, and more</p>
+          <h3 style={{ fontWeight: 600, color: colors.text, marginBottom: '0.25rem' }}>Connect Zoho API</h3>
+          <p style={{ fontSize: '0.875rem', color: colors.muted }}>Integrate with Zoho CRM, Books, and more</p>
         </button>
 
         <button
           onClick={() => setShowAPIModal(true)}
-          className="bg-white rounded-xl p-6 shadow-sm border-2 border-gray-200 hover:border-indigo-500 transition-all text-left group"
+          style={{ backgroundColor: colors.cardBg, borderRadius: '0.75rem', padding: '1.5rem', boxShadow: colors.cardShadow, border: `2px solid ${colors.cardBorder}`, textAlign: 'left', cursor: 'pointer', transition: 'border-color 0.2s' }}
+          onMouseOver={(e) => e.currentTarget.style.borderColor = '#6366f1'}
+          onMouseOut={(e) => e.currentTarget.style.borderColor = colors.cardBorder}
         >
-          <div className="bg-indigo-100 w-12 h-12 rounded-lg flex items-center justify-center mb-4 group-hover:bg-indigo-200 transition-colors">
-            <Link2 className="w-6 h-6 text-indigo-600" />
+          <div style={{ backgroundColor: palette.blue.bg, width: '3rem', height: '3rem', borderRadius: '0.5rem', display: 'flex', alignItems: 'center', justifyContent: 'center', marginBottom: '1rem' }}>
+            <Link2 style={{ width: '1.5rem', height: '1.5rem', color: palette.blue.text }} />
           </div>
-          <h3 className="font-semibold text-gray-900 mb-1">Configure API Connection</h3>
-          <p className="text-sm text-gray-600">Connect to any REST API with custom configuration</p>
+          <h3 style={{ fontWeight: 600, color: colors.text, marginBottom: '0.25rem' }}>Configure API Connection</h3>
+          <p style={{ fontSize: '0.875rem', color: colors.muted }}>Connect to any REST API with custom configuration</p>
         </button>
 
         <button
           onClick={() => setShowFileModal(true)}
-          className="bg-white rounded-xl p-6 shadow-sm border-2 border-gray-200 hover:border-green-500 transition-all text-left group"
+          style={{ backgroundColor: colors.cardBg, borderRadius: '0.75rem', padding: '1.5rem', boxShadow: colors.cardShadow, border: `2px solid ${colors.cardBorder}`, textAlign: 'left', cursor: 'pointer', transition: 'border-color 0.2s' }}
+          onMouseOver={(e) => e.currentTarget.style.borderColor = '#22c55e'}
+          onMouseOut={(e) => e.currentTarget.style.borderColor = colors.cardBorder}
         >
-          <div className="bg-green-100 w-12 h-12 rounded-lg flex items-center justify-center mb-4 group-hover:bg-green-200 transition-colors">
-            <Upload className="w-6 h-6 text-green-600" />
+          <div style={{ backgroundColor: palette.green.bg, width: '3rem', height: '3rem', borderRadius: '0.5rem', display: 'flex', alignItems: 'center', justifyContent: 'center', marginBottom: '1rem' }}>
+            <Upload style={{ width: '1.5rem', height: '1.5rem', color: palette.green.text }} />
           </div>
-          <h3 className="font-semibold text-gray-900 mb-1">Upload Data File</h3>
-          <p className="text-sm text-gray-600">Import from Excel or CSV</p>
+          <h3 style={{ fontWeight: 600, color: colors.text, marginBottom: '0.25rem' }}>Upload Data File</h3>
+          <p style={{ fontSize: '0.875rem', color: colors.muted }}>Import from Excel or CSV</p>
         </button>
       </div>
 
       {/* Data Sources List */}
-      <div className="bg-white rounded-xl shadow-sm border border-gray-200">
-        <div className="px-6 py-4 border-b border-gray-200">
-          <div className="flex items-center justify-between mb-3">
-            <h3 className="font-semibold text-gray-900">Connected Data Sources</h3>
-            <div className="flex items-center gap-3">
+      <div style={{ backgroundColor: colors.cardBg, borderRadius: '0.75rem', boxShadow: colors.cardShadow, border: `1px solid ${colors.cardBorder}` }}>
+        <div style={{ padding: '1rem 1.5rem', borderBottom: `1px solid ${colors.cardBorder}` }}>
+          <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: '0.75rem' }}>
+            <h3 style={{ fontWeight: 600, color: colors.text }}>Connected Data Sources</h3>
+            <div style={{ display: 'flex', alignItems: 'center', gap: '0.75rem' }}>
               {selectedSources.size > 0 && (
                 <button
                   onClick={handleBulkDelete}
                   disabled={deleting}
-                  className="px-4 py-2 text-sm text-white bg-red-600 hover:bg-red-700 rounded-lg transition-colors disabled:opacity-50 flex items-center gap-2"
+                  style={{ padding: '0.5rem 1rem', fontSize: '0.875rem', color: 'white', backgroundColor: '#dc2626', borderRadius: '0.5rem', border: 'none', cursor: 'pointer', display: 'flex', alignItems: 'center', gap: '0.5rem', opacity: deleting ? 0.5 : 1, transition: 'background-color 0.2s' }}
                 >
                   {deleting ? (
                     <Loader2 className="w-4 h-4 animate-spin" />
@@ -528,7 +540,7 @@ export default function DataSourceManagement() {
               <button
                 onClick={fetchDataSources}
                 disabled={loading}
-                className="p-2 text-gray-400 hover:text-indigo-600 transition-colors disabled:opacity-50"
+                style={{ padding: '0.5rem', color: colors.muted, border: 'none', background: 'transparent', cursor: 'pointer', opacity: loading ? 0.5 : 1, transition: 'color 0.2s' }}
                 title="Refresh list of data sources"
               >
                 <RefreshCw className={`w-5 h-5 ${loading ? 'animate-spin' : ''}`} />
@@ -536,72 +548,78 @@ export default function DataSourceManagement() {
             </div>
           </div>
           {dataSources.length > 0 && (
-            <div className="flex items-center gap-2">
+            <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
               <input
                 type="checkbox"
                 checked={selectedSources.size === dataSources.length && dataSources.length > 0}
                 onChange={handleSelectAll}
-                className="w-4 h-4 text-indigo-600 rounded focus:ring-indigo-500"
+                style={{ width: '1rem', height: '1rem' }}
               />
-              <label className="text-sm text-gray-600 cursor-pointer" onClick={handleSelectAll}>
+              <label style={{ fontSize: '0.875rem', color: colors.muted, cursor: 'pointer' }} onClick={handleSelectAll}>
                 Select All
               </label>
             </div>
           )}
         </div>
         {loading ? (
-          <div className="p-12 flex justify-center">
+          <div style={{ padding: '3rem', display: 'flex', justifyContent: 'center' }}>
             <Loader2 className="w-8 h-8 text-red-500 animate-spin" />
           </div>
         ) : (
-          <div className="divide-y divide-gray-200">
-            {dataSources.map((d) => (
-              <div key={d.id} className="p-6 hover:bg-gray-50 transition-colors">
-                <div className="flex items-start justify-between">
-                  <div className="flex items-start flex-1 gap-3">
+          <div>
+            {dataSources.map((d, index) => (
+              <div key={d.id} style={{ padding: '1.5rem', borderBottom: index < dataSources.length - 1 ? `1px solid ${colors.cardBorder}` : 'none', transition: 'background-color 0.2s' }}>
+                <div style={{ display: 'flex', alignItems: 'flex-start', justifyContent: 'space-between' }}>
+                  <div style={{ display: 'flex', alignItems: 'flex-start', flex: 1, gap: '0.75rem' }}>
                     <input
                       type="checkbox"
                       checked={selectedSources.has(d.id)}
                       onChange={() => handleToggleSelect(d.id)}
-                      className="mt-2 w-4 h-4 text-indigo-600 rounded focus:ring-indigo-500"
+                      style={{ marginTop: '0.5rem', width: '1rem', height: '1rem' }}
                     />
-                    <div className="bg-gray-100 p-3 rounded-lg">
-                      <Database className="w-6 h-6 text-gray-600" />
+                    <div style={{ backgroundColor: palette.gray.bg, padding: '0.75rem', borderRadius: '0.5rem' }}>
+                      <Database style={{ width: '1.5rem', height: '1.5rem', color: colors.muted }} />
                     </div>
-                    <div className="ml-4 flex-1">
-                      <div className="mb-2">
-                        <div className="flex items-center gap-3 mb-1 flex-wrap">
-                          <h4 className="font-semibold text-gray-900">{d.name}</h4>
+                    <div style={{ marginLeft: '1rem', flex: 1 }}>
+                      <div style={{ marginBottom: '0.5rem' }}>
+                        <div style={{ display: 'flex', alignItems: 'center', gap: '0.75rem', marginBottom: '0.25rem', flexWrap: 'wrap' }}>
+                          <h4 style={{ fontWeight: 600, color: colors.text }}>{d.name}</h4>
                           <span
-                            className={`inline-flex px-2 py-1 text-xs font-medium rounded-full ${getTypeColor(
-                              getTypeLabel(d.source_type)
-                            )}`}
+                            style={{
+                              display: 'inline-flex',
+                              padding: '0.25rem 0.5rem',
+                              fontSize: '0.75rem',
+                              fontWeight: 500,
+                              borderRadius: '9999px',
+                              backgroundColor: getTypeLabel(d.source_type) === 'API' ? palette.blue.bg : getTypeLabel(d.source_type) === 'Zoho' ? palette.purple.bg : palette.green.bg,
+                              color: getTypeLabel(d.source_type) === 'API' ? palette.blue.text : getTypeLabel(d.source_type) === 'Zoho' ? palette.purple.text : palette.green.text
+                            }}
                           >
                             {getTypeLabel(d.source_type)}
                           </span>
                         </div>
                         {/* Status shown below the name */}
-                        <div className="mt-1">
+                        <div style={{ marginTop: '0.25rem' }}>
                           {d.source_type !== 'api_config' && getStatusBadge(d)}
                           {d.source_type === 'api_config' && (
-                            <span className="inline-flex px-2 py-1 text-xs font-medium rounded-full bg-yellow-100 text-yellow-700">
+                            <span style={{ display: 'inline-flex', padding: '0.25rem 0.5rem', fontSize: '0.75rem', fontWeight: 500, borderRadius: '9999px', backgroundColor: palette.orange.bg, color: palette.orange.text }}>
                               Draft
                             </span>
                           )}
                           {d.last_error && (
-                            <div className="mt-1 p-2 bg-red-50 border border-red-200 rounded text-xs text-red-700">
+                            <div style={{ marginTop: '0.25rem', padding: '0.5rem', backgroundColor: palette.red.bg, border: `1px solid ${isDark ? '#7f1d1d' : '#fecaca'}`, borderRadius: '0.25rem', fontSize: '0.75rem', color: palette.red.text }}>
                               {d.last_error}
                             </div>
                           )}
                         </div>
                       </div>
                       {d.description && (
-                        <p className="text-sm text-gray-600 mb-3">{d.description}</p>
+                        <p style={{ fontSize: '0.875rem', color: colors.muted, marginBottom: '0.75rem' }}>{d.description}</p>
                       )}
-                      <div className="grid grid-cols-2 gap-4 text-sm">
+                      <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '1rem', fontSize: '0.875rem' }}>
                         <div>
-                          <span className="text-gray-500">Added: </span>
-                          <span className="text-gray-900 font-medium">
+                          <span style={{ color: colors.muted }}>Added: </span>
+                          <span style={{ color: colors.text, fontWeight: 500 }}>
                             {d.created_at
                               ? new Date(d.created_at).toLocaleString()
                               : '—'}
@@ -609,8 +627,8 @@ export default function DataSourceManagement() {
                         </div>
                         {d.source_type !== 'api_config' && (
                           <div>
-                            <span className="text-gray-500">Records: </span>
-                            <span className="text-gray-900 font-medium">
+                            <span style={{ color: colors.muted }}>Records: </span>
+                            <span style={{ color: colors.text, fontWeight: 500 }}>
                               {typeof d.row_count === 'number'
                                 ? d.row_count.toLocaleString()
                                 : '—'}
@@ -618,8 +636,8 @@ export default function DataSourceManagement() {
                           </div>
                         )}
                         <div>
-                          <span className="text-gray-500">Last Updated: </span>
-                          <span className="text-gray-900 font-medium">
+                          <span style={{ color: colors.muted }}>Last Updated: </span>
+                          <span style={{ color: colors.text, fontWeight: 500 }}>
                             {d.updated_at
                               ? new Date(d.updated_at).toLocaleString()
                               : '—'}
@@ -628,11 +646,11 @@ export default function DataSourceManagement() {
                       </div>
                     </div>
                   </div>
-                  <div className="flex items-center gap-2 ml-4">
+                  <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem', marginLeft: '1rem' }}>
                     {/* Edit button for all data sources */}
                     <button
                       onClick={() => handleEditDataset(d)}
-                      className="px-4 py-2 text-sm text-indigo-600 hover:bg-indigo-50 rounded-lg transition-colors flex items-center gap-2"
+                      style={{ padding: '0.5rem 1rem', fontSize: '0.875rem', color: '#6366f1', backgroundColor: 'transparent', borderRadius: '0.5rem', border: 'none', cursor: 'pointer', display: 'flex', alignItems: 'center', gap: '0.5rem', transition: 'background-color 0.2s' }}
                       title={d.source_type === 'api_config' ? 'Edit API configuration' : 'Edit data source'}
                     >
                       <Edit className="w-4 h-4" />
@@ -642,13 +660,13 @@ export default function DataSourceManagement() {
                     <button
                       onClick={() => handleRefresh(d)}
                       disabled={refreshing[d.id]}
-                      className="px-4 py-2 text-sm text-indigo-600 hover:bg-indigo-50 rounded-lg transition-colors disabled:opacity-50 flex items-center gap-2"
+                      style={{ padding: '0.5rem 1rem', fontSize: '0.875rem', color: '#6366f1', backgroundColor: 'transparent', borderRadius: '0.5rem', border: 'none', cursor: 'pointer', display: 'flex', alignItems: 'center', gap: '0.5rem', opacity: refreshing[d.id] ? 0.5 : 1, transition: 'background-color 0.2s' }}
                       title={
                         d.source_type === 'api'
                           ? 'Refresh API connection and update data'
                           : d.source_type === 'api_config'
-                          ? 'Refresh connection status'
-                          : 'Refresh data source'
+                            ? 'Refresh connection status'
+                            : 'Refresh data source'
                       }
                     >
                       {refreshing[d.id] ? (
@@ -660,7 +678,7 @@ export default function DataSourceManagement() {
                     </button>
                     <button
                       onClick={() => handleDelete(d)}
-                      className="px-4 py-2 text-sm text-red-600 hover:bg-red-50 rounded-lg transition-colors"
+                      style={{ padding: '0.5rem 1rem', fontSize: '0.875rem', color: '#dc2626', backgroundColor: 'transparent', borderRadius: '0.5rem', border: 'none', cursor: 'pointer', transition: 'background-color 0.2s' }}
                     >
                       Delete
                     </button>
@@ -671,7 +689,7 @@ export default function DataSourceManagement() {
           </div>
         )}
         {!loading && dataSources.length === 0 && (
-          <div className="p-12 text-center text-gray-500">
+          <div style={{ padding: '3rem', textAlign: 'center', color: colors.muted }}>
             No data sources yet. Upload a file or configure an API.
           </div>
         )}

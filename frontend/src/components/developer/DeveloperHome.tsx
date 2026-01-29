@@ -2,6 +2,8 @@ import { useState, useEffect, useCallback } from 'react';
 import { Plus, Eye, Edit, Trash2, Copy, BarChart3, Loader2 } from 'lucide-react';
 import { useNavigate } from 'react-router';
 import { apiGet } from '../../lib/api';
+import { useTheme } from '../../contexts/ThemeContext';
+import { getThemeColors, getColorPalette } from '../../lib/themeColors';
 
 interface Dashboard {
   id: number;
@@ -21,6 +23,11 @@ export default function DeveloperHome() {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const navigate = useNavigate();
+
+  // Theme support
+  const { isDark } = useTheme();
+  const colors = getThemeColors(isDark);
+  const palette = getColorPalette(isDark);
 
   const fetchDashboards = useCallback(async () => {
     setLoading(true);
@@ -56,15 +63,24 @@ export default function DeveloperHome() {
   };
 
   return (
-    <div className="space-y-6">
-      <div className="flex items-center justify-between">
+    <div style={{ display: 'flex', flexDirection: 'column', gap: '1.5rem' }}>
+      <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
         <div>
-          <h2 className="text-2xl font-semibold text-gray-900 mb-1">My Dashboards</h2>
-          <p className="text-gray-600">Create and manage your dashboards</p>
+          <h2 style={{ fontSize: '1.5rem', fontWeight: 600, color: colors.text, marginBottom: '0.25rem' }}>My Dashboards</h2>
+          <p style={{ color: colors.muted }}>Create and manage your dashboards</p>
         </div>
         <button
           onClick={() => navigate('/developer/builder')}
-          className="flex items-center px-4 py-2 bg-indigo-600 text-white rounded-lg hover:bg-indigo-700 transition-colors"
+          style={{
+            display: 'flex',
+            alignItems: 'center',
+            padding: '0.5rem 1rem',
+            backgroundColor: '#6366f1',
+            color: 'white',
+            borderRadius: '0.5rem',
+            border: 'none',
+            cursor: 'pointer'
+          }}
         >
           <Plus className="w-5 h-5 mr-2" />
           New Dashboard
@@ -72,42 +88,72 @@ export default function DeveloperHome() {
       </div>
 
       {error && (
-        <div className="p-4 rounded-lg bg-red-50 text-red-700 text-sm">{error}</div>
+        <div style={{
+          padding: '1rem',
+          borderRadius: '0.5rem',
+          backgroundColor: `${palette.red}20`,
+          color: palette.red,
+          fontSize: '0.875rem'
+        }}>{error}</div>
       )}
 
       {/* Stats */}
       <div className="grid grid-cols-1 md:grid-cols-4 gap-6">
-        <div className="bg-white rounded-xl p-6 shadow-sm border border-gray-200">
-          <div className="flex items-center justify-between">
+        <div style={{
+          backgroundColor: colors.cardBg,
+          borderRadius: '0.75rem',
+          padding: '1.5rem',
+          boxShadow: colors.cardShadow,
+          border: `1px solid ${colors.cardBorder}`
+        }}>
+          <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
             <div>
-              <p className="text-sm text-gray-600 mb-1">Total Dashboards</p>
-              <p className="text-3xl font-bold text-gray-900">
+              <p style={{ fontSize: '0.875rem', color: colors.muted, marginBottom: '0.25rem' }}>Total Dashboards</p>
+              <p style={{ fontSize: '1.875rem', fontWeight: 700, color: colors.text }}>
                 {loading ? '—' : dashboards.length}
               </p>
             </div>
-            <BarChart3 className="w-8 h-8 text-indigo-400" />
+            <BarChart3 className="w-8 h-8" style={{ color: palette.purple }} />
           </div>
         </div>
-        <div className="bg-white rounded-xl p-6 shadow-sm border border-gray-200">
+        <div style={{
+          backgroundColor: colors.cardBg,
+          borderRadius: '0.75rem',
+          padding: '1.5rem',
+          boxShadow: colors.cardShadow,
+          border: `1px solid ${colors.cardBorder}`
+        }}>
           <div>
-            <p className="text-sm text-gray-600 mb-1">Active</p>
-            <p className="text-3xl font-bold text-green-600">
+            <p style={{ fontSize: '0.875rem', color: colors.muted, marginBottom: '0.25rem' }}>Active</p>
+            <p style={{ fontSize: '1.875rem', fontWeight: 700, color: palette.green }}>
               {loading ? '—' : dashboards.filter((d) => d.is_active).length}
             </p>
           </div>
         </div>
-        <div className="bg-white rounded-xl p-6 shadow-sm border border-gray-200">
+        <div style={{
+          backgroundColor: colors.cardBg,
+          borderRadius: '0.75rem',
+          padding: '1.5rem',
+          boxShadow: colors.cardShadow,
+          border: `1px solid ${colors.cardBorder}`
+        }}>
           <div>
-            <p className="text-sm text-gray-600 mb-1">Total Widgets</p>
-            <p className="text-3xl font-bold text-blue-600">
+            <p style={{ fontSize: '0.875rem', color: colors.muted, marginBottom: '0.25rem' }}>Total Widgets</p>
+            <p style={{ fontSize: '1.875rem', fontWeight: 700, color: palette.blue }}>
               {loading ? '—' : dashboards.reduce((s, d) => s + widgetCount(d), 0)}
             </p>
           </div>
         </div>
-        <div className="bg-white rounded-xl p-6 shadow-sm border border-gray-200">
+        <div style={{
+          backgroundColor: colors.cardBg,
+          borderRadius: '0.75rem',
+          padding: '1.5rem',
+          boxShadow: colors.cardShadow,
+          border: `1px solid ${colors.cardBorder}`
+        }}>
           <div>
-            <p className="text-sm text-gray-600 mb-1">Assignments</p>
-            <p className="text-3xl font-bold text-purple-600">
+            <p style={{ fontSize: '0.875rem', color: colors.muted, marginBottom: '0.25rem' }}>Assignments</p>
+            <p style={{ fontSize: '1.875rem', fontWeight: 700, color: palette.purple }}>
               {loading
                 ? '—'
                 : dashboards.reduce((s, d) => s + (d.assignment_count ?? 0), 0)}
@@ -117,33 +163,45 @@ export default function DeveloperHome() {
       </div>
 
       {loading ? (
-        <div className="flex justify-center py-12">
-          <Loader2 className="w-10 h-10 text-indigo-500 animate-spin" />
+        <div style={{ display: 'flex', justifyContent: 'center', padding: '3rem 0' }}>
+          <Loader2 className="w-10 h-10 animate-spin" style={{ color: palette.purple }} />
         </div>
       ) : (
         <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
           {dashboards.map((d) => (
             <div
               key={d.id}
-              className="bg-white rounded-xl shadow-sm border border-gray-200 overflow-hidden hover:shadow-lg transition-shadow"
+              style={{
+                backgroundColor: colors.cardBg,
+                borderRadius: '0.75rem',
+                boxShadow: colors.cardShadow,
+                border: `1px solid ${colors.cardBorder}`,
+                overflow: 'hidden'
+              }}
             >
-              <div className="p-6">
-                <div className="flex items-start justify-between mb-4">
-                  <div className="flex-1">
-                    <div className="flex items-center gap-3 mb-2">
-                      <h3 className="text-lg font-semibold text-gray-900">{d.name}</h3>
+              <div style={{ padding: '1.5rem' }}>
+                <div style={{ display: 'flex', alignItems: 'flex-start', justifyContent: 'space-between', marginBottom: '1rem' }}>
+                  <div style={{ flex: 1 }}>
+                    <div style={{ display: 'flex', alignItems: 'center', gap: '0.75rem', marginBottom: '0.5rem' }}>
+                      <h3 style={{ fontSize: '1.125rem', fontWeight: 600, color: colors.text }}>{d.name}</h3>
                       <span
-                        className={`inline-flex px-2 py-1 text-xs font-medium rounded-full ${
-                          d.is_active ? 'bg-green-100 text-green-700' : 'bg-gray-100 text-gray-600'
-                        }`}
+                        style={{
+                          display: 'inline-flex',
+                          padding: '0.25rem 0.5rem',
+                          fontSize: '0.75rem',
+                          fontWeight: 500,
+                          borderRadius: '9999px',
+                          backgroundColor: d.is_active ? `${palette.green}20` : `${palette.gray}20`,
+                          color: d.is_active ? palette.green : palette.gray
+                        }}
                       >
                         {d.is_active ? 'Active' : 'Inactive'}
                       </span>
                     </div>
-                    <p className="text-sm text-gray-600 mb-3">
+                    <p style={{ fontSize: '0.875rem', color: colors.muted, marginBottom: '0.75rem' }}>
                       {d.description || 'No description'}
                     </p>
-                    <div className="flex items-center gap-4 text-xs text-gray-500">
+                    <div style={{ display: 'flex', alignItems: 'center', gap: '1rem', fontSize: '0.75rem', color: colors.muted }}>
                       <span>By {d.created_by_email ?? '—'}</span>
                       <span>•</span>
                       <span>
@@ -157,33 +215,33 @@ export default function DeveloperHome() {
                   </div>
                 </div>
 
-                <div className="flex items-center justify-between pt-4 border-t border-gray-200">
-                  <div className="text-sm text-gray-600">
+                <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', paddingTop: '1rem', borderTop: `1px solid ${colors.cardBorder}` }}>
+                  <div style={{ fontSize: '0.875rem', color: colors.muted }}>
                     {(d.assignment_count ?? 0)} assignment(s)
                   </div>
-                  <div className="flex items-center gap-2">
+                  <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
                     <button
                       onClick={() => navigate(`/developer/preview/${d.id}`)}
-                      className="p-2 text-gray-400 hover:text-indigo-600 transition-colors"
+                      style={{ padding: '0.5rem', color: colors.muted, background: 'none', border: 'none', cursor: 'pointer' }}
                       title="Preview"
                     >
                       <Eye className="w-4 h-4" />
                     </button>
                     <button
                       onClick={() => navigate(`/developer/builder/${d.id}`)}
-                      className="p-2 text-gray-400 hover:text-indigo-600 transition-colors"
+                      style={{ padding: '0.5rem', color: colors.muted, background: 'none', border: 'none', cursor: 'pointer' }}
                       title="Edit"
                     >
                       <Edit className="w-4 h-4" />
                     </button>
                     <button
-                      className="p-2 text-gray-400 hover:text-indigo-600 transition-colors"
+                      style={{ padding: '0.5rem', color: colors.muted, background: 'none', border: 'none', cursor: 'pointer' }}
                       title="Duplicate (coming soon)"
                     >
                       <Copy className="w-4 h-4" />
                     </button>
                     <button
-                      className="p-2 text-gray-400 hover:text-red-600 transition-colors"
+                      style={{ padding: '0.5rem', color: colors.muted, background: 'none', border: 'none', cursor: 'pointer' }}
                       title="Delete (coming soon)"
                     >
                       <Trash2 className="w-4 h-4" />
@@ -197,13 +255,26 @@ export default function DeveloperHome() {
       )}
 
       {!loading && dashboards.length === 0 && (
-        <div className="bg-white rounded-xl p-12 text-center border border-gray-200">
-          <BarChart3 className="w-16 h-16 text-gray-300 mx-auto mb-4" />
-          <h3 className="text-lg font-medium text-gray-900 mb-2">No dashboards yet</h3>
-          <p className="text-gray-600 mb-4">Create your first dashboard to get started.</p>
+        <div style={{
+          backgroundColor: colors.cardBg,
+          borderRadius: '0.75rem',
+          padding: '3rem',
+          textAlign: 'center',
+          border: `1px solid ${colors.cardBorder}`
+        }}>
+          <BarChart3 className="w-16 h-16 mx-auto mb-4" style={{ color: colors.muted }} />
+          <h3 style={{ fontSize: '1.125rem', fontWeight: 500, color: colors.text, marginBottom: '0.5rem' }}>No dashboards yet</h3>
+          <p style={{ color: colors.muted, marginBottom: '1rem' }}>Create your first dashboard to get started.</p>
           <button
             onClick={() => navigate('/developer/builder')}
-            className="px-4 py-2 bg-indigo-600 text-white rounded-lg hover:bg-indigo-700 transition-colors"
+            style={{
+              padding: '0.5rem 1rem',
+              backgroundColor: '#6366f1',
+              color: 'white',
+              borderRadius: '0.5rem',
+              border: 'none',
+              cursor: 'pointer'
+            }}
           >
             New Dashboard
           </button>

@@ -10,6 +10,7 @@ import {
   Loader2,
 } from 'lucide-react';
 import { apiGet } from '../../lib/api';
+import { useTheme } from '../../contexts/ThemeContext';
 
 interface OverviewCounts {
   users: number;
@@ -19,6 +20,7 @@ interface OverviewCounts {
 }
 
 export default function AdminOverview() {
+  const { isDark } = useTheme();
   const [counts, setCounts] = useState<OverviewCounts>({
     users: 0,
     dashboards: 0,
@@ -27,6 +29,45 @@ export default function AdminOverview() {
   });
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
+
+  // Theme colors
+  const colors = {
+    text: isDark ? '#f1f5f9' : '#1e293b',
+    textMuted: isDark ? '#94a3b8' : '#64748b',
+    textSecondary: isDark ? '#cbd5e1' : '#475569',
+    cardBg: isDark ? 'rgba(255,255,255,0.05)' : '#ffffff',
+    cardBorder: isDark ? 'rgba(255,255,255,0.1)' : '#e2e8f0',
+    cardShadow: isDark ? '0 4px 20px rgba(0,0,0,0.3)' : '0 4px 20px rgba(0,0,0,0.05)',
+    sectionBorder: isDark ? 'rgba(255,255,255,0.1)' : '#e5e7eb',
+  };
+
+  const colorPalette = {
+    blue: {
+      bg: isDark ? 'rgba(59, 130, 246, 0.15)' : '#eff6ff',
+      text: isDark ? '#60a5fa' : '#2563eb',
+      icon: isDark ? 'rgba(59, 130, 246, 0.2)' : '#dbeafe',
+    },
+    purple: {
+      bg: isDark ? 'rgba(147, 51, 234, 0.15)' : '#faf5ff',
+      text: isDark ? '#a78bfa' : '#9333ea',
+      icon: isDark ? 'rgba(147, 51, 234, 0.2)' : '#f3e8ff',
+    },
+    green: {
+      bg: isDark ? 'rgba(34, 197, 94, 0.15)' : '#f0fdf4',
+      text: isDark ? '#4ade80' : '#16a34a',
+      icon: isDark ? 'rgba(34, 197, 94, 0.2)' : '#dcfce7',
+    },
+    orange: {
+      bg: isDark ? 'rgba(249, 115, 22, 0.15)' : '#fff7ed',
+      text: isDark ? '#fb923c' : '#ea580c',
+      icon: isDark ? 'rgba(249, 115, 22, 0.2)' : '#ffedd5',
+    },
+    red: {
+      bg: isDark ? 'rgba(239, 68, 68, 0.15)' : '#fef2f2',
+      text: isDark ? '#f87171' : '#dc2626',
+      icon: isDark ? 'rgba(239, 68, 68, 0.2)' : '#fee2e2',
+    },
+  };
 
   const fetchCounts = useCallback(async () => {
     setLoading(true);
@@ -55,44 +96,33 @@ export default function AdminOverview() {
     fetchCounts();
   }, [fetchCounts]);
 
-  const getColorClasses = (color: string) => {
-    const colors: Record<string, { bg: string; text: string; icon: string }> = {
-      blue: { bg: 'bg-blue-50', text: 'text-blue-600', icon: 'bg-blue-100' },
-      purple: { bg: 'bg-purple-50', text: 'text-purple-600', icon: 'bg-purple-100' },
-      green: { bg: 'bg-green-50', text: 'text-green-600', icon: 'bg-green-100' },
-      red: { bg: 'bg-red-50', text: 'text-red-600', icon: 'bg-red-100' },
-      orange: { bg: 'bg-orange-50', text: 'text-orange-600', icon: 'bg-orange-100' },
-    };
-    return colors[color];
-  };
-
   const kpiCards = [
     {
       title: 'Total Users',
       value: loading ? '—' : counts.users.toLocaleString(),
       icon: Users,
-      color: 'blue',
+      color: 'blue' as const,
       description: 'Registered system users',
     },
     {
       title: 'Active Dashboards',
       value: loading ? '—' : counts.dashboards,
       icon: LayoutDashboard,
-      color: 'purple',
+      color: 'purple' as const,
       description: 'Published dashboards',
     },
     {
       title: 'Data Sources',
       value: loading ? '—' : counts.datasets,
       icon: Database,
-      color: 'green',
+      color: 'green' as const,
       description: 'Connected data sources',
     },
     {
       title: 'API Configurations',
       value: loading ? '—' : counts.apiConfigs,
       icon: Key,
-      color: 'orange',
+      color: 'orange' as const,
       description: 'Configured API connections',
     },
   ];
@@ -104,7 +134,7 @@ export default function AdminOverview() {
       description: 'Manage users, roles, and permissions',
       link: '/admin/users',
       count: counts.users,
-      color: 'blue',
+      color: 'blue' as const,
     },
     {
       title: 'Data Sources',
@@ -112,7 +142,7 @@ export default function AdminOverview() {
       description: 'Configure and manage data connections',
       link: '/admin/data-sources',
       count: counts.datasets,
-      color: 'green',
+      color: 'green' as const,
     },
     {
       title: 'Access Control',
@@ -120,7 +150,7 @@ export default function AdminOverview() {
       description: 'Control dashboard and feature access',
       link: '/admin/access-control',
       count: counts.dashboards,
-      color: 'purple',
+      color: 'purple' as const,
     },
     {
       title: 'API Configuration',
@@ -128,46 +158,46 @@ export default function AdminOverview() {
       description: 'Manage API keys and endpoints',
       link: '/admin/api-config',
       count: counts.apiConfigs,
-      color: 'orange',
+      color: 'orange' as const,
     },
   ];
 
   if (loading && counts.users === 0 && counts.dashboards === 0) {
     return (
-      <div className="flex items-center justify-center min-h-[400px]">
-        <Loader2 className="w-10 h-10 text-red-500 animate-spin" />
+      <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', minHeight: '400px' }}>
+        <Loader2 style={{ width: '40px', height: '40px', color: '#ef4444', animation: 'spin 1s linear infinite' }} />
       </div>
     );
   }
 
   return (
-    <div className="space-y-6">
+    <div style={{ display: 'flex', flexDirection: 'column', gap: '24px' }}>
       <div>
-        <h2 className="text-2xl font-semibold text-gray-900 mb-1">System Overview</h2>
-        <p className="text-gray-600">Manage your enterprise dashboard system</p>
+        <h2 style={{ fontSize: '1.5rem', fontWeight: 600, color: colors.text, marginBottom: '4px' }}>System Overview</h2>
+        <p style={{ color: colors.textMuted }}>Manage your enterprise dashboard system</p>
       </div>
 
       {error && (
-        <div className="p-4 rounded-lg bg-red-50 text-red-700 text-sm">{error}</div>
+        <div style={{ padding: '16px', borderRadius: '12px', background: colorPalette.red.bg, color: colorPalette.red.text, fontSize: '14px' }}>{error}</div>
       )}
 
       {/* KPI Cards */}
-      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6">
+      <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(240px, 1fr))', gap: '24px' }}>
         {kpiCards.map((kpi) => {
-          const colors = getColorClasses(kpi.color);
+          const palette = colorPalette[kpi.color];
           return (
             <div
               key={kpi.title}
-              className="bg-white rounded-xl p-6 shadow-sm border border-gray-200"
+              style={{ background: colors.cardBg, borderRadius: '16px', padding: '24px', border: `1px solid ${colors.cardBorder}`, boxShadow: colors.cardShadow }}
             >
-              <div className="flex items-start justify-between mb-4">
-                <div className={`${colors.icon} p-3 rounded-lg`}>
-                  <kpi.icon className={`w-6 h-6 ${colors.text}`} />
+              <div style={{ marginBottom: '16px' }}>
+                <div style={{ background: palette.icon, padding: '12px', borderRadius: '12px', display: 'inline-flex' }}>
+                  <kpi.icon style={{ width: '24px', height: '24px', color: palette.text }} />
                 </div>
               </div>
-              <h3 className="text-sm font-medium text-gray-600 mb-1">{kpi.title}</h3>
-              <p className="text-3xl font-bold text-gray-900 mb-2">{kpi.value}</p>
-              <p className="text-sm text-gray-500">{kpi.description}</p>
+              <h3 style={{ fontSize: '14px', fontWeight: 500, color: palette.text, marginBottom: '4px' }}>{kpi.title}</h3>
+              <p style={{ fontSize: '2rem', fontWeight: 700, color: colors.text, marginBottom: '8px' }}>{kpi.value}</p>
+              <p style={{ fontSize: '14px', color: colors.textMuted }}>{kpi.description}</p>
             </div>
           );
         })}
@@ -175,30 +205,30 @@ export default function AdminOverview() {
 
       {/* Management Sections */}
       <div>
-        <h3 className="text-lg font-semibold text-gray-900 mb-4">Quick Access</h3>
-        <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+        <h3 style={{ fontSize: '1.125rem', fontWeight: 600, color: colors.text, marginBottom: '16px' }}>Quick Access</h3>
+        <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(300px, 1fr))', gap: '24px' }}>
           {managementSections.map((section) => {
-            const colors = getColorClasses(section.color);
+            const palette = colorPalette[section.color];
             return (
               <Link
                 key={section.title}
                 to={section.link}
-                className="bg-white rounded-xl p-6 shadow-sm border border-gray-200 hover:shadow-lg transition-all group"
+                style={{ background: colors.cardBg, borderRadius: '16px', padding: '24px', border: `1px solid ${colors.cardBorder}`, boxShadow: colors.cardShadow, textDecoration: 'none', transition: 'all 0.3s ease' }}
+                onMouseEnter={(e) => { e.currentTarget.style.transform = 'translateY(-4px)'; e.currentTarget.style.boxShadow = isDark ? '0 8px 30px rgba(0,0,0,0.4)' : '0 8px 30px rgba(0,0,0,0.1)'; }}
+                onMouseLeave={(e) => { e.currentTarget.style.transform = 'translateY(0)'; e.currentTarget.style.boxShadow = colors.cardShadow; }}
               >
-                <div className="flex items-start justify-between mb-4">
-                  <div
-                    className={`${colors.icon} p-3 rounded-lg group-hover:scale-110 transition-transform`}
-                  >
-                    <section.icon className={`w-6 h-6 ${colors.text}`} />
+                <div style={{ display: 'flex', alignItems: 'flex-start', justifyContent: 'space-between', marginBottom: '16px' }}>
+                  <div style={{ background: palette.icon, padding: '12px', borderRadius: '12px', transition: 'transform 0.3s ease' }}>
+                    <section.icon style={{ width: '24px', height: '24px', color: palette.text }} />
                   </div>
-                  <span className={`text-2xl font-bold ${colors.text}`}>
+                  <span style={{ fontSize: '1.5rem', fontWeight: 700, color: palette.text }}>
                     {loading ? '—' : section.count}
                   </span>
                 </div>
-                <h4 className="text-lg font-semibold text-gray-900 mb-2 group-hover:text-red-600 transition-colors">
+                <h4 style={{ fontSize: '1.125rem', fontWeight: 600, color: colors.text, marginBottom: '8px' }}>
                   {section.title}
                 </h4>
-                <p className="text-sm text-gray-600">{section.description}</p>
+                <p style={{ fontSize: '14px', color: colors.textMuted }}>{section.description}</p>
               </Link>
             );
           })}
@@ -207,48 +237,48 @@ export default function AdminOverview() {
 
       {/* System Status */}
       <div>
-        <h3 className="text-lg font-semibold text-gray-900 mb-4">System Status</h3>
-        <div className="bg-white rounded-xl p-6 shadow-sm border border-gray-200">
-          <div className="space-y-4">
-            <div className="flex items-center justify-between pb-4 border-b border-gray-200">
-              <div className="flex items-center">
-                <div className="w-10 h-10 bg-green-100 rounded-lg flex items-center justify-center mr-3">
-                  <Activity className="w-5 h-5 text-green-600" />
+        <h3 style={{ fontSize: '1.125rem', fontWeight: 600, color: colors.text, marginBottom: '16px' }}>System Status</h3>
+        <div style={{ background: colors.cardBg, borderRadius: '16px', padding: '24px', border: `1px solid ${colors.cardBorder}`, boxShadow: colors.cardShadow }}>
+          <div style={{ display: 'flex', flexDirection: 'column', gap: '16px' }}>
+            <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', paddingBottom: '16px', borderBottom: `1px solid ${colors.sectionBorder}` }}>
+              <div style={{ display: 'flex', alignItems: 'center' }}>
+                <div style={{ width: '40px', height: '40px', background: colorPalette.green.icon, borderRadius: '10px', display: 'flex', alignItems: 'center', justifyContent: 'center', marginRight: '12px' }}>
+                  <Activity style={{ width: '20px', height: '20px', color: colorPalette.green.text }} />
                 </div>
                 <div>
-                  <h4 className="font-medium text-gray-900">API Services</h4>
-                  <p className="text-sm text-gray-600">All services operational</p>
+                  <h4 style={{ fontWeight: 500, color: colors.text }}>API Services</h4>
+                  <p style={{ fontSize: '14px', color: colors.textMuted }}>All services operational</p>
                 </div>
               </div>
-              <span className="px-3 py-1 bg-green-100 text-green-700 rounded-full text-sm font-medium">
+              <span style={{ padding: '4px 12px', background: colorPalette.green.bg, color: colorPalette.green.text, borderRadius: '9999px', fontSize: '14px', fontWeight: 500 }}>
                 Online
               </span>
             </div>
-            <div className="flex items-center justify-between pb-4 border-b border-gray-200">
-              <div className="flex items-center">
-                <div className="w-10 h-10 bg-blue-100 rounded-lg flex items-center justify-center mr-3">
-                  <Database className="w-5 h-5 text-blue-600" />
+            <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', paddingBottom: '16px', borderBottom: `1px solid ${colors.sectionBorder}` }}>
+              <div style={{ display: 'flex', alignItems: 'center' }}>
+                <div style={{ width: '40px', height: '40px', background: colorPalette.blue.icon, borderRadius: '10px', display: 'flex', alignItems: 'center', justifyContent: 'center', marginRight: '12px' }}>
+                  <Database style={{ width: '20px', height: '20px', color: colorPalette.blue.text }} />
                 </div>
                 <div>
-                  <h4 className="font-medium text-gray-900">Database Connection</h4>
-                  <p className="text-sm text-gray-600">All connections stable</p>
+                  <h4 style={{ fontWeight: 500, color: colors.text }}>Database Connection</h4>
+                  <p style={{ fontSize: '14px', color: colors.textMuted }}>All connections stable</p>
                 </div>
               </div>
-              <span className="px-3 py-1 bg-green-100 text-green-700 rounded-full text-sm font-medium">
+              <span style={{ padding: '4px 12px', background: colorPalette.green.bg, color: colorPalette.green.text, borderRadius: '9999px', fontSize: '14px', fontWeight: 500 }}>
                 Healthy
               </span>
             </div>
-            <div className="flex items-center justify-between">
-              <div className="flex items-center">
-                <div className="w-10 h-10 bg-purple-100 rounded-lg flex items-center justify-center mr-3">
-                  <Key className="w-5 h-5 text-purple-600" />
+            <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
+              <div style={{ display: 'flex', alignItems: 'center' }}>
+                <div style={{ width: '40px', height: '40px', background: colorPalette.purple.icon, borderRadius: '10px', display: 'flex', alignItems: 'center', justifyContent: 'center', marginRight: '12px' }}>
+                  <Key style={{ width: '20px', height: '20px', color: colorPalette.purple.text }} />
                 </div>
                 <div>
-                  <h4 className="font-medium text-gray-900">API Authentication</h4>
-                  <p className="text-sm text-gray-600">JWT-secured endpoints</p>
+                  <h4 style={{ fontWeight: 500, color: colors.text }}>API Authentication</h4>
+                  <p style={{ fontSize: '14px', color: colors.textMuted }}>JWT-secured endpoints</p>
                 </div>
               </div>
-              <span className="px-3 py-1 bg-green-100 text-green-700 rounded-full text-sm font-medium">
+              <span style={{ padding: '4px 12px', background: colorPalette.green.bg, color: colorPalette.green.text, borderRadius: '9999px', fontSize: '14px', fontWeight: 500 }}>
                 Active
               </span>
             </div>
@@ -258,18 +288,20 @@ export default function AdminOverview() {
 
       {/* Audit Logs CTA */}
       <div>
-        <div className="flex items-center justify-between mb-4">
-          <h3 className="text-lg font-semibold text-gray-900">Audit Logs</h3>
+        <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: '16px' }}>
+          <h3 style={{ fontSize: '1.125rem', fontWeight: 600, color: colors.text }}>Audit Logs</h3>
           <Link
             to="/admin/audit-logs"
-            className="text-sm text-red-600 hover:text-red-700 font-medium"
+            style={{ fontSize: '14px', color: '#ef4444', textDecoration: 'none', fontWeight: 500 }}
+            onMouseEnter={(e) => e.currentTarget.style.color = '#dc2626'}
+            onMouseLeave={(e) => e.currentTarget.style.color = '#ef4444'}
           >
             View All Logs →
           </Link>
         </div>
-        <div className="bg-white rounded-xl shadow-sm border border-gray-200 p-8 text-center text-gray-500">
-          <LayoutDashboard className="w-12 h-12 mx-auto mb-2 text-gray-300" />
-          <p>View full audit history and system activity in Audit Logs.</p>
+        <div style={{ background: colors.cardBg, borderRadius: '16px', border: `1px solid ${colors.cardBorder}`, boxShadow: colors.cardShadow, padding: '32px', textAlign: 'center' }}>
+          <LayoutDashboard style={{ width: '48px', height: '48px', margin: '0 auto 8px', color: colors.textMuted, opacity: 0.5 }} />
+          <p style={{ color: colors.textMuted }}>View full audit history and system activity in Audit Logs.</p>
         </div>
       </div>
     </div>

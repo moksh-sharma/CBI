@@ -1,5 +1,7 @@
 import { useState } from 'react';
 import { X, Upload, CheckCircle, AlertCircle, FileSpreadsheet } from 'lucide-react';
+import { useTheme } from '../../contexts/ThemeContext';
+import { getThemeColors, getColorPalette } from '../../lib/themeColors';
 
 interface FileUploadModalProps {
   isOpen: boolean;
@@ -10,6 +12,10 @@ interface FileUploadModalProps {
 }
 
 export default function FileUploadModal({ isOpen, onClose, onSave, onUpload }: FileUploadModalProps) {
+  const { isDark } = useTheme();
+  const colors = getThemeColors(isDark);
+  const palette = getColorPalette(isDark);
+
   const [selectedFile, setSelectedFile] = useState<File | null>(null);
   const [dataSourceName, setDataSourceName] = useState('');
   const [uploadStatus, setUploadStatus] = useState<'idle' | 'loading' | 'success' | 'error'>('idle');
@@ -94,123 +100,123 @@ export default function FileUploadModal({ isOpen, onClose, onSave, onUpload }: F
   };
 
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black bg-opacity-50 p-4">
-      <div className="bg-white rounded-lg shadow-xl w-full max-w-lg">
+    <div style={{ position: 'fixed', inset: 0, zIndex: 50, display: 'flex', alignItems: 'center', justifyContent: 'center', backgroundColor: 'rgba(0,0,0,0.5)', padding: '1rem' }}>
+      <div style={{ backgroundColor: colors.cardBg, borderRadius: '0.5rem', boxShadow: '0 25px 50px -12px rgba(0, 0, 0, 0.25)', width: '100%', maxWidth: '32rem' }}>
         {/* Header */}
-        <div className="flex items-center justify-between px-6 py-4 border-b border-gray-200">
-          <h2 className="text-xl font-semibold text-gray-900">Upload Data File</h2>
+        <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', padding: '1rem 1.5rem', borderBottom: `1px solid ${colors.cardBorder}` }}>
+          <h2 style={{ fontSize: '1.25rem', fontWeight: 600, color: colors.text }}>Upload Data File</h2>
           <button
             onClick={handleClose}
-            className="p-1 text-gray-400 hover:text-gray-600 transition-colors"
+            style={{ padding: '0.25rem', color: colors.muted, backgroundColor: 'transparent', border: 'none', cursor: 'pointer', transition: 'color 0.2s' }}
           >
             <X className="w-5 h-5" />
           </button>
         </div>
 
         {/* Content */}
-        <div className="p-6 space-y-4">
+        <div style={{ padding: '1.5rem', display: 'flex', flexDirection: 'column', gap: '1rem' }}>
           {/* Data Source Name */}
           <div>
-            <label className="block text-sm font-medium text-gray-700 mb-2">
-              Data Source Name <span className="text-red-500">*</span>
+            <label style={{ display: 'block', fontSize: '0.875rem', fontWeight: 500, color: colors.text, marginBottom: '0.5rem' }}>
+              Data Source Name <span style={{ color: '#ef4444' }}>*</span>
             </label>
             <input
               type="text"
               value={dataSourceName}
               onChange={(e) => setDataSourceName(e.target.value)}
               placeholder="e.g., Sales Data Q1 2024"
-              className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-green-500 focus:border-transparent outline-none"
+              style={{ width: '100%', padding: '0.5rem 1rem', border: `1px solid ${colors.inputBorder}`, borderRadius: '0.5rem', outline: 'none', backgroundColor: colors.inputBg, color: colors.text }}
             />
           </div>
 
           {/* File Upload */}
           <div>
-            <label className="block text-sm font-medium text-gray-700 mb-2">
-              Data File <span className="text-red-500">*</span>
+            <label style={{ display: 'block', fontSize: '0.875rem', fontWeight: 500, color: colors.text, marginBottom: '0.5rem' }}>
+              Data File <span style={{ color: '#ef4444' }}>*</span>
             </label>
-            <div 
+            <div
               onDrop={handleDrop}
               onDragOver={handleDragOver}
-              className="border-2 border-dashed border-gray-300 rounded-lg p-8 text-center hover:border-green-500 transition-colors"
+              style={{ border: `2px dashed ${colors.inputBorder}`, borderRadius: '0.5rem', padding: '2rem', textAlign: 'center', transition: 'border-color 0.2s' }}
             >
-              <Upload className="w-12 h-12 text-gray-400 mx-auto mb-3" />
-              <label className="cursor-pointer">
-                <span className="text-sm text-green-600 hover:text-green-700 font-medium">
+              <Upload style={{ width: '3rem', height: '3rem', color: colors.muted, margin: '0 auto 0.75rem' }} />
+              <label style={{ cursor: 'pointer' }}>
+                <span style={{ fontSize: '0.875rem', color: '#22c55e', fontWeight: 500 }}>
                   Click to upload
                 </span>
-                <span className="text-sm text-gray-500"> or drag and drop</span>
+                <span style={{ fontSize: '0.875rem', color: colors.muted }}> or drag and drop</span>
                 <input
                   type="file"
                   onChange={handleFileSelect}
-                  className="hidden"
+                  style={{ display: 'none' }}
                   accept=".xlsx,.xls,.csv,.json,.xml,.txt"
                 />
               </label>
-              <p className="text-xs text-gray-500 mt-2">
+              <p style={{ fontSize: '0.75rem', color: colors.muted, marginTop: '0.5rem' }}>
                 Supported: Excel, CSV, JSON, XML, TXT
               </p>
             </div>
             {selectedFile && (
-              <div className="mt-3 flex items-center text-sm text-gray-700 bg-gray-50 px-4 py-3 rounded-lg">
-                <FileSpreadsheet className="w-5 h-5 text-green-600 mr-2 flex-shrink-0" />
-                <div className="flex-1 min-w-0">
-                  <p className="font-medium truncate">{selectedFile.name}</p>
-                  <p className="text-gray-500">{(selectedFile.size / 1024).toFixed(2)} KB</p>
+              <div style={{ marginTop: '0.75rem', display: 'flex', alignItems: 'center', fontSize: '0.875rem', color: colors.text, backgroundColor: palette.gray.bg, padding: '0.75rem 1rem', borderRadius: '0.5rem' }}>
+                <FileSpreadsheet style={{ width: '1.25rem', height: '1.25rem', color: '#22c55e', marginRight: '0.5rem', flexShrink: 0 }} />
+                <div style={{ flex: 1, minWidth: 0 }}>
+                  <p style={{ fontWeight: 500, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{selectedFile.name}</p>
+                  <p style={{ color: colors.muted }}>{(selectedFile.size / 1024).toFixed(2)} KB</p>
                 </div>
-                <CheckCircle className="w-5 h-5 text-green-600 ml-2 flex-shrink-0" />
+                <CheckCircle style={{ width: '1.25rem', height: '1.25rem', color: '#22c55e', marginLeft: '0.5rem', flexShrink: 0 }} />
               </div>
             )}
           </div>
 
           {/* Status Messages */}
           {uploadStatus === 'success' && (
-            <div className="flex items-center text-sm text-green-700 bg-green-50 px-4 py-3 rounded-lg">
-              <CheckCircle className="w-5 h-5 mr-2" />
+            <div style={{ display: 'flex', alignItems: 'center', fontSize: '0.875rem', color: palette.green.text, backgroundColor: palette.green.bg, padding: '0.75rem 1rem', borderRadius: '0.5rem' }}>
+              <CheckCircle style={{ width: '1.25rem', height: '1.25rem', marginRight: '0.5rem' }} />
               File uploaded successfully!
             </div>
           )}
 
           {uploadStatus === 'error' && errorMessage && (
-            <div className="flex items-center text-sm text-red-700 bg-red-50 px-4 py-3 rounded-lg">
-              <AlertCircle className="w-5 h-5 mr-2" />
+            <div style={{ display: 'flex', alignItems: 'center', fontSize: '0.875rem', color: palette.red.text, backgroundColor: palette.red.bg, padding: '0.75rem 1rem', borderRadius: '0.5rem' }}>
+              <AlertCircle style={{ width: '1.25rem', height: '1.25rem', marginRight: '0.5rem' }} />
               {errorMessage}
             </div>
           )}
 
           {/* Instructions */}
-          <div className="bg-blue-50 border border-blue-200 rounded-lg p-4">
-            <h4 className="text-sm font-medium text-blue-900 mb-2">Supported File Formats:</h4>
-            <ul className="text-xs text-blue-800 space-y-1 list-disc list-inside">
+          <div style={{ backgroundColor: palette.blue.bg, border: `1px solid ${isDark ? '#1e40af' : '#bfdbfe'}`, borderRadius: '0.5rem', padding: '1rem' }}>
+            <h4 style={{ fontSize: '0.875rem', fontWeight: 500, color: palette.blue.text, marginBottom: '0.5rem' }}>Supported File Formats:</h4>
+            <ul style={{ fontSize: '0.75rem', color: palette.blue.text, paddingLeft: '1rem', listStyleType: 'disc', display: 'flex', flexDirection: 'column', gap: '0.25rem' }}>
               <li><strong>Excel:</strong> .xlsx, .xls (with headers in first row)</li>
               <li><strong>CSV:</strong> Comma-separated values</li>
               <li><strong>JSON:</strong> Array of objects or nested data</li>
               <li><strong>XML:</strong> Structured XML data</li>
               <li><strong>Text:</strong> Tab or comma delimited</li>
             </ul>
-            <p className="text-xs text-blue-800 mt-2">
+            <p style={{ fontSize: '0.75rem', color: palette.blue.text, marginTop: '0.5rem' }}>
               Maximum file size: 10MB
             </p>
           </div>
         </div>
 
         {/* Footer */}
-        <div className="flex items-center justify-end gap-3 px-6 py-4 border-t border-gray-200 bg-gray-50">
+        <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'flex-end', gap: '0.75rem', padding: '1rem 1.5rem', borderTop: `1px solid ${colors.cardBorder}`, backgroundColor: colors.tableBg }}>
           <button
             onClick={handleClose}
-            className="px-4 py-2 text-gray-700 hover:bg-gray-200 rounded-lg transition-colors"
+            style={{ padding: '0.5rem 1rem', color: colors.text, backgroundColor: 'transparent', border: 'none', borderRadius: '0.5rem', cursor: 'pointer', transition: 'background-color 0.2s' }}
           >
             Cancel
           </button>
           <button
             onClick={handleUpload}
             disabled={!selectedFile || !dataSourceName.trim() || uploadStatus === 'loading'}
-            className="px-4 py-2 bg-green-600 text-white rounded-lg hover:bg-green-700 transition-colors disabled:opacity-50 disabled:cursor-not-allowed flex items-center"
+            style={{ padding: '0.5rem 1rem', backgroundColor: '#22c55e', color: 'white', borderRadius: '0.5rem', border: 'none', cursor: 'pointer', display: 'flex', alignItems: 'center', opacity: (!selectedFile || !dataSourceName.trim() || uploadStatus === 'loading') ? 0.5 : 1, transition: 'background-color 0.2s' }}
           >
             {uploadStatus === 'loading' ? (
-              <span className="animate-pulse">Uploading...</span>
+              <span>Uploading...</span>
             ) : (
               <>
-                <Upload className="w-4 h-4 mr-2" />
+                <Upload style={{ width: '1rem', height: '1rem', marginRight: '0.5rem' }} />
                 Upload & Create
               </>
             )}

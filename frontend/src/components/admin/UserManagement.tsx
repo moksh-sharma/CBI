@@ -1,6 +1,8 @@
 import { useState, useEffect, useCallback } from 'react';
 import { Plus, Search, Edit, Trash2, MoreVertical, UserPlus, Loader2 } from 'lucide-react';
 import { apiGet, apiPost, apiPut, apiDelete } from '../../lib/api';
+import { useTheme } from '../../contexts/ThemeContext';
+import { getThemeColors, getColorPalette, getRoleBadgeColors, getStatusBadgeColors } from '../../lib/themeColors';
 
 interface BackendUser {
   id: number;
@@ -20,6 +22,10 @@ interface Role {
 }
 
 export default function UserManagement() {
+  const { isDark } = useTheme();
+  const colors = getThemeColors(isDark);
+  const palette = getColorPalette(isDark);
+
   const [users, setUsers] = useState<BackendUser[]>([]);
   const [roles, setRoles] = useState<Role[]>([]);
   const [loading, setLoading] = useState(true);
@@ -189,11 +195,11 @@ export default function UserManagement() {
   };
 
   return (
-    <div className="space-y-6">
-      <div className="flex items-center justify-between">
+    <div style={{ display: 'flex', flexDirection: 'column', gap: '1.5rem' }}>
+      <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
         <div>
-          <h2 className="text-2xl font-semibold text-gray-900 mb-1">User Management</h2>
-          <p className="text-gray-600">Create, edit, and manage user accounts</p>
+          <h2 style={{ fontSize: '1.5rem', fontWeight: 600, color: colors.text, marginBottom: '0.25rem' }}>User Management</h2>
+          <p style={{ color: colors.muted }}>Create, edit, and manage user accounts</p>
         </div>
         <button
           onClick={() => {
@@ -201,7 +207,9 @@ export default function UserManagement() {
             setForm({ first_name: '', last_name: '', email: '', password: '', role_id: 2 });
             setShowAddModal(true);
           }}
-          className="flex items-center px-4 py-2 bg-red-600 text-white rounded-lg hover:bg-red-700 transition-colors"
+          style={{ display: 'flex', alignItems: 'center', padding: '0.5rem 1rem', backgroundColor: '#dc2626', color: 'white', borderRadius: '0.5rem', border: 'none', cursor: 'pointer', transition: 'background-color 0.2s' }}
+          onMouseOver={(e) => e.currentTarget.style.backgroundColor = '#b91c1c'}
+          onMouseOut={(e) => e.currentTarget.style.backgroundColor = '#dc2626'}
         >
           <Plus className="w-5 h-5 mr-2" />
           Add User
@@ -209,253 +217,259 @@ export default function UserManagement() {
       </div>
 
       {error && (
-        <div className="p-4 rounded-lg bg-red-50 text-red-700 text-sm">{error}</div>
+        <div style={{ padding: '1rem', borderRadius: '0.5rem', backgroundColor: palette.red.bg, color: palette.red.text, fontSize: '0.875rem' }}>{error}</div>
       )}
 
       {/* Search and Filters */}
-      <div className="bg-white rounded-xl p-6 shadow-sm border border-gray-200">
-        <div className="flex flex-col md:flex-row gap-4">
-          <div className="flex-1 relative">
-            <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-5 h-5 text-gray-400" />
+      <div style={{ backgroundColor: colors.cardBg, borderRadius: '0.75rem', padding: '1.5rem', boxShadow: colors.cardShadow, border: `1px solid ${colors.cardBorder}` }}>
+        <div style={{ display: 'flex', flexDirection: 'column', gap: '1rem' }}>
+          <div style={{ flex: 1, position: 'relative' }}>
+            <Search style={{ position: 'absolute', left: '0.75rem', top: '50%', transform: 'translateY(-50%)', width: '1.25rem', height: '1.25rem', color: colors.muted }} />
             <input
               type="text"
               value={searchTerm}
               onChange={(e) => setSearchTerm(e.target.value)}
               placeholder="Search users by name or email..."
-              className="w-full pl-10 pr-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-red-500 focus:border-transparent outline-none"
+              style={{ width: '100%', paddingLeft: '2.5rem', paddingRight: '1rem', paddingTop: '0.5rem', paddingBottom: '0.5rem', border: `1px solid ${colors.inputBorder}`, borderRadius: '0.5rem', outline: 'none', backgroundColor: colors.inputBg, color: colors.text }}
             />
           </div>
-          <select
-            value={roleFilter}
-            onChange={(e) => setRoleFilter(e.target.value)}
-            className="px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-red-500 focus:border-transparent outline-none"
-          >
-            <option value="all">All Roles</option>
-            <option value="admin">Admin</option>
-            <option value="developer">Developer</option>
-            <option value="viewer">Viewer</option>
-          </select>
-          <select
-            value={statusFilter}
-            onChange={(e) => setStatusFilter(e.target.value)}
-            className="px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-red-500 focus:border-transparent outline-none"
-          >
-            <option value="all">All Status</option>
-            <option value="active">Active</option>
-            <option value="inactive">Inactive</option>
-          </select>
+          <div style={{ display: 'flex', gap: '1rem', flexWrap: 'wrap' }}>
+            <select
+              value={roleFilter}
+              onChange={(e) => setRoleFilter(e.target.value)}
+              style={{ padding: '0.5rem 1rem', border: `1px solid ${colors.inputBorder}`, borderRadius: '0.5rem', outline: 'none', backgroundColor: colors.inputBg, color: colors.text }}
+            >
+              <option value="all">All Roles</option>
+              <option value="admin">Admin</option>
+              <option value="developer">Developer</option>
+              <option value="viewer">Viewer</option>
+            </select>
+            <select
+              value={statusFilter}
+              onChange={(e) => setStatusFilter(e.target.value)}
+              style={{ padding: '0.5rem 1rem', border: `1px solid ${colors.inputBorder}`, borderRadius: '0.5rem', outline: 'none', backgroundColor: colors.inputBg, color: colors.text }}
+            >
+              <option value="all">All Status</option>
+              <option value="active">Active</option>
+              <option value="inactive">Inactive</option>
+            </select>
+          </div>
         </div>
       </div>
 
       {/* Users Table */}
-      <div className="bg-white rounded-xl shadow-sm border border-gray-200 overflow-hidden">
+      <div style={{ backgroundColor: colors.cardBg, borderRadius: '0.75rem', boxShadow: colors.cardShadow, border: `1px solid ${colors.cardBorder}`, overflow: 'hidden' }}>
         {loading ? (
-          <div className="p-12 flex justify-center">
+          <div style={{ padding: '3rem', display: 'flex', justifyContent: 'center' }}>
             <Loader2 className="w-8 h-8 text-red-500 animate-spin" />
           </div>
         ) : (
-          <div className="overflow-x-auto">
-            <table className="w-full">
-              <thead className="bg-gray-50 border-b border-gray-200">
+          <div style={{ overflowX: 'auto' }}>
+            <table style={{ width: '100%', borderCollapse: 'collapse' }}>
+              <thead style={{ backgroundColor: colors.tableBg, borderBottom: `1px solid ${colors.cardBorder}` }}>
                 <tr>
-                  <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                  <th style={{ padding: '0.75rem 1.5rem', textAlign: 'left', fontSize: '0.75rem', fontWeight: 500, color: colors.muted, textTransform: 'uppercase', letterSpacing: '0.05em' }}>
                     User
                   </th>
-                  <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                  <th style={{ padding: '0.75rem 1.5rem', textAlign: 'left', fontSize: '0.75rem', fontWeight: 500, color: colors.muted, textTransform: 'uppercase', letterSpacing: '0.05em' }}>
                     Role
                   </th>
-                  <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                  <th style={{ padding: '0.75rem 1.5rem', textAlign: 'left', fontSize: '0.75rem', fontWeight: 500, color: colors.muted, textTransform: 'uppercase', letterSpacing: '0.05em' }}>
                     Status
                   </th>
-                  <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                  <th style={{ padding: '0.75rem 1.5rem', textAlign: 'left', fontSize: '0.75rem', fontWeight: 500, color: colors.muted, textTransform: 'uppercase', letterSpacing: '0.05em' }}>
                     Created
                   </th>
-                  <th className="px-6 py-3 text-right text-xs font-medium text-gray-500 uppercase tracking-wider">
+                  <th style={{ padding: '0.75rem 1.5rem', textAlign: 'right', fontSize: '0.75rem', fontWeight: 500, color: colors.muted, textTransform: 'uppercase', letterSpacing: '0.05em' }}>
                     Actions
                   </th>
                 </tr>
               </thead>
-              <tbody className="divide-y divide-gray-200">
-                {filteredUsers.map((user) => (
-                  <tr key={user.id} className="hover:bg-gray-50 transition-colors">
-                    <td className="px-6 py-4">
-                      <div className="flex items-center">
-                        <div className="w-10 h-10 rounded-full bg-gray-200 flex items-center justify-center">
-                          <span className="text-gray-600 font-medium">
-                            {user.first_name.charAt(0)}
-                            {user.last_name.charAt(0)}
-                          </span>
-                        </div>
-                        <div className="ml-4">
-                          <div className="font-medium text-gray-900">
-                            {user.first_name} {user.last_name}
+              <tbody>
+                {filteredUsers.map((user, index) => {
+                  const roleBadge = getRoleBadgeColors(user.role_name, isDark);
+                  const statusBadge = getStatusBadgeColors(user.is_active, isDark);
+                  return (
+                    <tr key={user.id} style={{ borderBottom: index < filteredUsers.length - 1 ? `1px solid ${colors.cardBorder}` : 'none' }}>
+                      <td style={{ padding: '1rem 1.5rem' }}>
+                        <div style={{ display: 'flex', alignItems: 'center' }}>
+                          <div style={{ width: '2.5rem', height: '2.5rem', borderRadius: '50%', backgroundColor: palette.gray.bg, display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+                            <span style={{ color: colors.muted, fontWeight: 500 }}>
+                              {user.first_name.charAt(0)}
+                              {user.last_name.charAt(0)}
+                            </span>
                           </div>
-                          <div className="text-sm text-gray-500">{user.email}</div>
+                          <div style={{ marginLeft: '1rem' }}>
+                            <div style={{ fontWeight: 500, color: colors.text }}>
+                              {user.first_name} {user.last_name}
+                            </div>
+                            <div style={{ fontSize: '0.875rem', color: colors.muted }}>{user.email}</div>
+                          </div>
                         </div>
-                      </div>
-                    </td>
-                    <td className="px-6 py-4">
-                      <span
-                        className={`inline-flex px-2 py-1 text-xs font-medium rounded-full ${getRoleBadgeColor(user.role_name)}`}
-                      >
-                        {user.role_name.charAt(0).toUpperCase() + user.role_name.slice(1)}
-                      </span>
-                    </td>
-                    <td className="px-6 py-4">
-                      <span
-                        className={`inline-flex px-2 py-1 text-xs font-medium rounded-full ${getStatusBadgeColor(user.is_active)}`}
-                      >
-                        {user.is_active ? 'Active' : 'Inactive'}
-                      </span>
-                    </td>
-                    <td className="px-6 py-4 text-sm text-gray-600">
-                      {user.created_at
-                        ? new Date(user.created_at).toLocaleDateString()
-                        : '—'}
-                    </td>
-                    <td className="px-6 py-4 text-right">
-                      <div className="flex items-center justify-end space-x-2">
-                        <button
-                          onClick={() => openEdit(user)}
-                          className="p-2 text-gray-400 hover:text-indigo-600 transition-colors"
-                          title="Edit"
-                        >
-                          <Edit className="w-4 h-4" />
-                        </button>
-                        <button
-                          onClick={() => handleDelete(user.id)}
-                          disabled={submitting}
-                          className="p-2 text-gray-400 hover:text-red-600 transition-colors disabled:opacity-50"
-                          title="Delete"
-                        >
-                          <Trash2 className="w-4 h-4" />
-                        </button>
-                      </div>
-                    </td>
-                  </tr>
-                ))}
+                      </td>
+                      <td style={{ padding: '1rem 1.5rem' }}>
+                        <span style={{ display: 'inline-flex', padding: '0.25rem 0.5rem', fontSize: '0.75rem', fontWeight: 500, borderRadius: '9999px', backgroundColor: roleBadge.bg, color: roleBadge.text }}>
+                          {user.role_name.charAt(0).toUpperCase() + user.role_name.slice(1)}
+                        </span>
+                      </td>
+                      <td style={{ padding: '1rem 1.5rem' }}>
+                        <span style={{ display: 'inline-flex', padding: '0.25rem 0.5rem', fontSize: '0.75rem', fontWeight: 500, borderRadius: '9999px', backgroundColor: statusBadge.bg, color: statusBadge.text }}>
+                          {user.is_active ? 'Active' : 'Inactive'}
+                        </span>
+                      </td>
+                      <td style={{ padding: '1rem 1.5rem', fontSize: '0.875rem', color: colors.muted }}>
+                        {user.created_at
+                          ? new Date(user.created_at).toLocaleDateString()
+                          : '—'}
+                      </td>
+                      <td style={{ padding: '1rem 1.5rem', textAlign: 'right' }}>
+                        <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'flex-end', gap: '0.5rem' }}>
+                          <button
+                            onClick={() => openEdit(user)}
+                            style={{ padding: '0.5rem', color: colors.muted, border: 'none', background: 'transparent', cursor: 'pointer', transition: 'color 0.2s' }}
+                            onMouseOver={(e) => e.currentTarget.style.color = '#6366f1'}
+                            onMouseOut={(e) => e.currentTarget.style.color = colors.muted}
+                            title="Edit"
+                          >
+                            <Edit className="w-4 h-4" />
+                          </button>
+                          <button
+                            onClick={() => handleDelete(user.id)}
+                            disabled={submitting}
+                            style={{ padding: '0.5rem', color: colors.muted, border: 'none', background: 'transparent', cursor: 'pointer', transition: 'color 0.2s', opacity: submitting ? 0.5 : 1 }}
+                            onMouseOver={(e) => e.currentTarget.style.color = '#dc2626'}
+                            onMouseOut={(e) => e.currentTarget.style.color = colors.muted}
+                            title="Delete"
+                          >
+                            <Trash2 className="w-4 h-4" />
+                          </button>
+                        </div>
+                      </td>
+                    </tr>
+                  );
+                })}
               </tbody>
             </table>
           </div>
         )}
         {!loading && filteredUsers.length === 0 && (
-          <div className="p-12 text-center text-gray-500">No users found</div>
+          <div style={{ padding: '3rem', textAlign: 'center', color: colors.muted }}>No users found</div>
         )}
       </div>
 
       {/* Add / Edit User Modal */}
       {showAddModal && (
-        <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 p-4">
-          <div className="bg-white rounded-2xl max-w-md w-full p-6">
-            <div className="flex items-center mb-6">
-              <div className="bg-red-100 p-3 rounded-lg">
-                <UserPlus className="w-6 h-6 text-red-600" />
+        <div style={{ position: 'fixed', inset: 0, backgroundColor: 'rgba(0,0,0,0.5)', display: 'flex', alignItems: 'center', justifyContent: 'center', zIndex: 50, padding: '1rem' }}>
+          <div style={{ backgroundColor: colors.cardBg, borderRadius: '1rem', maxWidth: '28rem', width: '100%', padding: '1.5rem' }}>
+            <div style={{ display: 'flex', alignItems: 'center', marginBottom: '1.5rem' }}>
+              <div style={{ backgroundColor: palette.red.bg, padding: '0.75rem', borderRadius: '0.5rem' }}>
+                <UserPlus style={{ width: '1.5rem', height: '1.5rem', color: palette.red.text }} />
               </div>
-              <h3 className="text-xl font-semibold text-gray-900 ml-3">
+              <h3 style={{ fontSize: '1.25rem', fontWeight: 600, color: colors.text, marginLeft: '0.75rem' }}>
                 {editingId ? 'Edit User' : 'Add New User'}
               </h3>
             </div>
 
             <form
               onSubmit={(e) => (editingId ? handleUpdate(e, editingId) : handleAdd(e))}
-              className="space-y-4"
+              style={{ display: 'flex', flexDirection: 'column', gap: '1rem' }}
             >
               {formError && (
-                <div className="p-3 rounded-lg bg-red-50 text-red-700 text-sm">{formError}</div>
+                <div style={{ padding: '0.75rem', borderRadius: '0.5rem', backgroundColor: palette.red.bg, color: palette.red.text, fontSize: '0.875rem' }}>{formError}</div>
               )}
-              <div className="grid grid-cols-2 gap-4">
+              <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '1rem' }}>
                 <div>
-                  <label className="block text-sm font-medium text-gray-700 mb-2">
+                  <label style={{ display: 'block', fontSize: '0.875rem', fontWeight: 500, color: colors.text, marginBottom: '0.5rem' }}>
                     First Name
                   </label>
                   <input
                     type="text"
                     value={form.first_name}
                     onChange={(e) => setForm((f) => ({ ...f, first_name: e.target.value }))}
-                    className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-red-500 focus:border-transparent outline-none"
+                    style={{ width: '100%', padding: '0.5rem 1rem', border: `1px solid ${colors.inputBorder}`, borderRadius: '0.5rem', outline: 'none', backgroundColor: colors.inputBg, color: colors.text }}
                     placeholder="John"
                     required
                   />
                 </div>
                 <div>
-                  <label className="block text-sm font-medium text-gray-700 mb-2">
+                  <label style={{ display: 'block', fontSize: '0.875rem', fontWeight: 500, color: colors.text, marginBottom: '0.5rem' }}>
                     Last Name
                   </label>
                   <input
                     type="text"
                     value={form.last_name}
                     onChange={(e) => setForm((f) => ({ ...f, last_name: e.target.value }))}
-                    className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-red-500 focus:border-transparent outline-none"
+                    style={{ width: '100%', padding: '0.5rem 1rem', border: `1px solid ${colors.inputBorder}`, borderRadius: '0.5rem', outline: 'none', backgroundColor: colors.inputBg, color: colors.text }}
                     placeholder="Doe"
                     required
                   />
                 </div>
               </div>
               <div>
-                <label className="block text-sm font-medium text-gray-700 mb-2">
+                <label style={{ display: 'block', fontSize: '0.875rem', fontWeight: 500, color: colors.text, marginBottom: '0.5rem' }}>
                   Email Address
                 </label>
                 <input
                   type="email"
                   value={form.email}
                   onChange={(e) => setForm((f) => ({ ...f, email: e.target.value }))}
-                  className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-red-500 focus:border-transparent outline-none"
+                  style={{ width: '100%', padding: '0.5rem 1rem', border: `1px solid ${colors.inputBorder}`, borderRadius: '0.5rem', outline: 'none', backgroundColor: colors.inputBg, color: colors.text }}
                   placeholder="john@company.com"
                   required
                   readOnly={!!editingId}
                 />
                 {editingId && (
-                  <p className="text-xs text-gray-500 mt-1">Email cannot be changed</p>
+                  <p style={{ fontSize: '0.75rem', color: colors.muted, marginTop: '0.25rem' }}>Email cannot be changed</p>
                 )}
               </div>
               <div>
-                <label className="block text-sm font-medium text-gray-700 mb-2">
+                <label style={{ display: 'block', fontSize: '0.875rem', fontWeight: 500, color: colors.text, marginBottom: '0.5rem' }}>
                   Password {editingId && '(leave blank to keep unchanged)'}
                 </label>
                 <input
                   type="password"
                   value={form.password}
                   onChange={(e) => setForm((f) => ({ ...f, password: e.target.value }))}
-                  className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-red-500 focus:border-transparent outline-none"
+                  style={{ width: '100%', padding: '0.5rem 1rem', border: `1px solid ${colors.inputBorder}`, borderRadius: '0.5rem', outline: 'none', backgroundColor: colors.inputBg, color: colors.text }}
                   placeholder="••••••••"
                   required={!editingId}
                   minLength={6}
                 />
               </div>
               <div>
-                <label className="block text-sm font-medium text-gray-700 mb-2">Role</label>
+                <label style={{ display: 'block', fontSize: '0.875rem', fontWeight: 500, color: colors.text, marginBottom: '0.5rem' }}>Role</label>
                 <select
                   value={form.role_id}
                   onChange={(e) => setForm((f) => ({ ...f, role_id: parseInt(e.target.value, 10) }))}
-                  className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-red-500 focus:border-transparent outline-none"
+                  style={{ width: '100%', padding: '0.5rem 1rem', border: `1px solid ${colors.inputBorder}`, borderRadius: '0.5rem', outline: 'none', backgroundColor: colors.inputBg, color: colors.text }}
                 >
                   {roles.length > 0
                     ? roles.map((r) => (
-                        <option key={r.id} value={r.id}>
-                          {r.name.charAt(0).toUpperCase() + r.name.slice(1)}
-                        </option>
-                      ))
+                      <option key={r.id} value={r.id}>
+                        {r.name.charAt(0).toUpperCase() + r.name.slice(1)}
+                      </option>
+                    ))
                     : (
-                        <>
-                          <option value={1}>Admin</option>
-                          <option value={2}>Developer</option>
-                          <option value={3}>Viewer</option>
-                        </>
-                      )}
+                      <>
+                        <option value={1}>Admin</option>
+                        <option value={2}>Developer</option>
+                        <option value={3}>Viewer</option>
+                      </>
+                    )}
                 </select>
               </div>
-              <div className="flex gap-3 pt-4">
+              <div style={{ display: 'flex', gap: '0.75rem', paddingTop: '1rem' }}>
                 <button
                   type="button"
                   onClick={resetForm}
-                  className="flex-1 px-4 py-2 border border-gray-300 text-gray-700 rounded-lg hover:bg-gray-50 transition-colors"
+                  style={{ flex: 1, padding: '0.5rem 1rem', border: `1px solid ${colors.inputBorder}`, color: colors.text, borderRadius: '0.5rem', backgroundColor: 'transparent', cursor: 'pointer', transition: 'background-color 0.2s' }}
                 >
                   Cancel
                 </button>
                 <button
                   type="submit"
                   disabled={submitting}
-                  className="flex-1 px-4 py-2 bg-red-600 text-white rounded-lg hover:bg-red-700 transition-colors disabled:opacity-50 flex items-center justify-center gap-2"
+                  style={{ flex: 1, padding: '0.5rem 1rem', backgroundColor: '#dc2626', color: 'white', borderRadius: '0.5rem', border: 'none', cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '0.5rem', opacity: submitting ? 0.5 : 1, transition: 'background-color 0.2s' }}
                 >
                   {submitting && <Loader2 className="w-4 h-4 animate-spin" />}
                   {editingId ? 'Update' : 'Add User'}

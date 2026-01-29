@@ -1,6 +1,8 @@
 import { useState, useEffect } from 'react';
 import { X, Link2, CheckCircle, AlertCircle, Loader2, Eye, EyeOff } from 'lucide-react';
 import { apiPost, apiGet, apiPut } from '../../lib/api';
+import { useTheme } from '../../contexts/ThemeContext';
+import { getThemeColors, getColorPalette } from '../../lib/themeColors';
 
 interface ApiConfig {
   id: number;
@@ -51,6 +53,11 @@ export default function APIConfigModal({ isOpen, onClose, onSave, editingConfig 
   const [showBearerToken, setShowBearerToken] = useState(false);
   const [showPassword, setShowPassword] = useState(false);
 
+  // Theme support
+  const { isDark } = useTheme();
+  const colors = getThemeColors(isDark);
+  const palette = getColorPalette(isDark);
+
   // Load config for editing
   useEffect(() => {
     if (editingConfig && isOpen) {
@@ -67,7 +74,7 @@ export default function APIConfigModal({ isOpen, onClose, onSave, editingConfig 
               } else if (typeof config.headers === 'object') {
                 headersObj = config.headers as Record<string, string>;
               }
-            } catch {}
+            } catch { }
 
             // Parse auth config
             let authConfig: Record<string, string> = {};
@@ -77,7 +84,7 @@ export default function APIConfigModal({ isOpen, onClose, onSave, editingConfig 
               } else if (typeof config.auth_config === 'object') {
                 authConfig = config.auth_config as Record<string, string>;
               }
-            } catch {}
+            } catch { }
 
             // Build URL - split into base URL and endpoint for display
             setFormData({
@@ -188,7 +195,7 @@ export default function APIConfigModal({ isOpen, onClose, onSave, editingConfig 
       setTestMessage('Please provide a URL.');
       return;
     }
-    
+
     if (!formData.method || formData.method.trim() === '') {
       setTestStatus('error');
       setTestMessage('Please select an HTTP method.');
@@ -208,7 +215,7 @@ export default function APIConfigModal({ isOpen, onClose, onSave, editingConfig 
       // Build auth config
       let authConfig: Record<string, string> = {};
       let authType = formData.authType || 'none';
-      
+
       if (formData.authType === 'bearer' && formData.authToken) {
         authConfig = { token: formData.authToken };
         authType = 'bearer';
@@ -232,7 +239,7 @@ export default function APIConfigModal({ isOpen, onClose, onSave, editingConfig 
       // User provides full URL or base_url + endpoint separately
       const baseUrl = formData.url.trim();
       const endpoint = formData.endpoint ? formData.endpoint.trim() : '';
-      
+
       // Build query string from form params if provided
       const queryParams = formData.queryParams.filter(p => p.key && p.value);
       let queryString = '';
@@ -257,10 +264,10 @@ export default function APIConfigModal({ isOpen, onClose, onSave, editingConfig 
       });
 
       // Use direct test endpoint (doesn't create config)
-      const testRes = await apiPost<{ 
-        message: string; 
-        data?: { 
-          status: number; 
+      const testRes = await apiPost<{
+        message: string;
+        data?: {
+          status: number;
           statusText?: string;
           url?: string;
           method?: string;
@@ -278,8 +285,8 @@ export default function APIConfigModal({ isOpen, onClose, onSave, editingConfig 
           headers: Object.keys(headersObj).length > 0 ? headersObj : {},
           auth_type: authType,
           auth_config: Object.keys(authConfig).length > 0 ? authConfig : (authType !== 'none' ? {} : undefined),
-          timeout_ms: formData.refreshInterval && formData.refreshInterval.trim() !== '' 
-            ? parseInt(formData.refreshInterval) * 1000 
+          timeout_ms: formData.refreshInterval && formData.refreshInterval.trim() !== ''
+            ? parseInt(formData.refreshInterval) * 1000
             : 30000, // Use form timeout if provided
         }
       );
@@ -291,7 +298,7 @@ export default function APIConfigModal({ isOpen, onClose, onSave, editingConfig 
         setTestStatus('error');
         // Show EXACT error details from API - no masking
         let errorMsg = testRes.message || 'Connection test failed';
-        
+
         // Add request details
         if (testRes.data) {
           const data = testRes.data;
@@ -304,8 +311,8 @@ export default function APIConfigModal({ isOpen, onClose, onSave, editingConfig 
           }
           if (data.responseData) {
             try {
-              const responseStr = typeof data.responseData === 'string' 
-                ? data.responseData 
+              const responseStr = typeof data.responseData === 'string'
+                ? data.responseData
                 : JSON.stringify(data.responseData);
               errorMsg += `\nResponse: ${responseStr.substring(0, 500)}`;
             } catch {
@@ -313,7 +320,7 @@ export default function APIConfigModal({ isOpen, onClose, onSave, editingConfig 
             }
           }
         }
-        
+
         // Add error details if available
         if (testRes.details) {
           const details = testRes.details as any;
@@ -332,7 +339,7 @@ export default function APIConfigModal({ isOpen, onClose, onSave, editingConfig 
             }
           }
         }
-        
+
         setTestMessage(errorMsg);
       }
     } catch (e) {
@@ -349,7 +356,7 @@ export default function APIConfigModal({ isOpen, onClose, onSave, editingConfig 
       setTestMessage('Please provide a name and URL.');
       return;
     }
-    
+
     if (!formData.method || formData.method.trim() === '') {
       setTestStatus('error');
       setTestMessage('Please select an HTTP method.');
@@ -369,7 +376,7 @@ export default function APIConfigModal({ isOpen, onClose, onSave, editingConfig 
       // Build auth config
       let authConfig: Record<string, string> = {};
       let authType = formData.authType || 'none';
-      
+
       if (formData.authType === 'bearer' && formData.authToken) {
         authConfig = { token: formData.authToken };
         authType = 'bearer';
@@ -391,7 +398,7 @@ export default function APIConfigModal({ isOpen, onClose, onSave, editingConfig 
 
       // Use EXACT values - NO URL parsing or modification
       const baseUrl = formData.url.trim();
-      
+
       // Build endpoint with query params if provided
       let endpoint = formData.endpoint ? formData.endpoint.trim() : '';
       const queryParams = formData.queryParams.filter(p => p.key && p.value);
@@ -410,11 +417,11 @@ export default function APIConfigModal({ isOpen, onClose, onSave, editingConfig 
           headers: Object.keys(headersObj).length > 0 ? headersObj : null,
           auth_type: authType,
           auth_config: Object.keys(authConfig).length > 0 ? authConfig : null,
-          rate_limit_per_minute: formData.refreshInterval && formData.refreshInterval.trim() !== '' 
-            ? parseInt(formData.refreshInterval, 10) 
+          rate_limit_per_minute: formData.refreshInterval && formData.refreshInterval.trim() !== ''
+            ? parseInt(formData.refreshInterval, 10)
             : 60, // Use form value if provided
-          timeout_ms: formData.refreshInterval && formData.refreshInterval.trim() !== '' 
-            ? parseInt(formData.refreshInterval, 10) * 1000 
+          timeout_ms: formData.refreshInterval && formData.refreshInterval.trim() !== ''
+            ? parseInt(formData.refreshInterval, 10) * 1000
             : 30000, // Use form timeout if provided (convert seconds to ms)
         });
         if (!updateRes.success) {
@@ -429,11 +436,11 @@ export default function APIConfigModal({ isOpen, onClose, onSave, editingConfig 
           headers: Object.keys(headersObj).length > 0 ? headersObj : null,
           auth_type: authType,
           auth_config: Object.keys(authConfig).length > 0 ? authConfig : null,
-          rate_limit_per_minute: formData.refreshInterval && formData.refreshInterval.trim() !== '' 
-            ? parseInt(formData.refreshInterval, 10) 
+          rate_limit_per_minute: formData.refreshInterval && formData.refreshInterval.trim() !== ''
+            ? parseInt(formData.refreshInterval, 10)
             : 60, // Use form value if provided
-          timeout_ms: formData.refreshInterval && formData.refreshInterval.trim() !== '' 
-            ? parseInt(formData.refreshInterval, 10) * 1000 
+          timeout_ms: formData.refreshInterval && formData.refreshInterval.trim() !== ''
+            ? parseInt(formData.refreshInterval, 10) * 1000
             : 30000, // Use form timeout if provided (convert seconds to ms)
         });
 
@@ -473,7 +480,7 @@ export default function APIConfigModal({ isOpen, onClose, onSave, editingConfig 
       // Build auth config
       let authConfig: Record<string, string> = {};
       let authType = formData.authType || 'none';
-      
+
       if (formData.authType === 'bearer' && formData.authToken) {
         authConfig = { token: formData.authToken };
         authType = 'bearer';
@@ -495,7 +502,7 @@ export default function APIConfigModal({ isOpen, onClose, onSave, editingConfig 
 
       // Use EXACT values - NO URL parsing or modification
       const baseUrl = formData.url.trim();
-      
+
       // Build endpoint with query params if provided
       let endpoint = formData.endpoint ? formData.endpoint.trim() : '';
       const queryParams = formData.queryParams.filter(p => p.key && p.value);
@@ -515,11 +522,11 @@ export default function APIConfigModal({ isOpen, onClose, onSave, editingConfig 
           headers: Object.keys(headersObj).length > 0 ? headersObj : null,
           auth_type: authType,
           auth_config: Object.keys(authConfig).length > 0 ? authConfig : null,
-          rate_limit_per_minute: formData.refreshInterval && formData.refreshInterval.trim() !== '' 
-            ? parseInt(formData.refreshInterval, 10) 
+          rate_limit_per_minute: formData.refreshInterval && formData.refreshInterval.trim() !== ''
+            ? parseInt(formData.refreshInterval, 10)
             : 60, // Use form value if provided
-          timeout_ms: formData.refreshInterval && formData.refreshInterval.trim() !== '' 
-            ? parseInt(formData.refreshInterval, 10) * 1000 
+          timeout_ms: formData.refreshInterval && formData.refreshInterval.trim() !== ''
+            ? parseInt(formData.refreshInterval, 10) * 1000
             : 30000, // Use form timeout if provided (convert seconds to ms)
         });
         if (!updateRes.success) {
@@ -535,11 +542,11 @@ export default function APIConfigModal({ isOpen, onClose, onSave, editingConfig 
           headers: Object.keys(headersObj).length > 0 ? headersObj : null,
           auth_type: authType,
           auth_config: Object.keys(authConfig).length > 0 ? authConfig : null,
-          rate_limit_per_minute: formData.refreshInterval && formData.refreshInterval.trim() !== '' 
-            ? parseInt(formData.refreshInterval, 10) 
+          rate_limit_per_minute: formData.refreshInterval && formData.refreshInterval.trim() !== ''
+            ? parseInt(formData.refreshInterval, 10)
             : 60, // Use form value if provided
-          timeout_ms: formData.refreshInterval && formData.refreshInterval.trim() !== '' 
-            ? parseInt(formData.refreshInterval, 10) * 1000 
+          timeout_ms: formData.refreshInterval && formData.refreshInterval.trim() !== ''
+            ? parseInt(formData.refreshInterval, 10) * 1000
             : 30000, // Use form timeout if provided (convert seconds to ms)
         });
 
@@ -577,58 +584,101 @@ export default function APIConfigModal({ isOpen, onClose, onSave, editingConfig 
 
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center bg-black bg-opacity-50 p-4">
-      <div className="bg-white rounded-lg shadow-xl w-full max-w-3xl max-h-[90vh] overflow-hidden flex flex-col">
+      <div
+        style={{
+          backgroundColor: colors.cardBg,
+          boxShadow: colors.cardShadow,
+          borderRadius: '0.5rem',
+          width: '100%',
+          maxWidth: '48rem',
+          maxHeight: '90vh',
+          overflow: 'hidden',
+          display: 'flex',
+          flexDirection: 'column'
+        }}
+      >
         {/* Header */}
-        <div className="flex items-center justify-between px-6 py-4 border-b border-gray-200">
-          <h2 className="text-xl font-semibold text-gray-900">
+        <div
+          style={{
+            display: 'flex',
+            alignItems: 'center',
+            justifyContent: 'space-between',
+            padding: '1rem 1.5rem',
+            borderBottom: `1px solid ${colors.cardBorder}`
+          }}
+        >
+          <h2 style={{ fontSize: '1.25rem', fontWeight: 600, color: colors.text }}>
             {editingConfig ? 'Edit API Configuration' : 'Configure API Data Source'}
           </h2>
           <button
             onClick={onClose}
-            className="p-1 text-gray-400 hover:text-gray-600 transition-colors"
+            style={{
+              padding: '0.25rem',
+              color: colors.muted,
+              background: 'none',
+              border: 'none',
+              cursor: 'pointer',
+              borderRadius: '0.25rem'
+            }}
           >
             <X className="w-5 h-5" />
           </button>
         </div>
 
         {/* Content - Scrollable */}
-        <div className="flex-1 overflow-y-auto p-6 space-y-6">
+        <div style={{ flex: 1, overflowY: 'auto', padding: '1.5rem' }}>
           {/* Basic Info */}
-          <div className="space-y-4">
-            <h3 className="font-semibold text-gray-900">Basic Information</h3>
+          <div style={{ marginBottom: '1.5rem' }}>
+            <h3 style={{ fontWeight: 600, color: colors.text, marginBottom: '1rem' }}>Basic Information</h3>
 
-            <div>
-              <label className="block text-sm font-medium text-gray-700 mb-2">
-                Data Source Name <span className="text-red-500">*</span>
+            <div style={{ marginBottom: '1rem' }}>
+              <label style={{ display: 'block', fontSize: '0.875rem', fontWeight: 500, color: colors.text, marginBottom: '0.5rem' }}>
+                Data Source Name <span style={{ color: palette.red }}>*</span>
               </label>
               <input
                 type="text"
                 value={formData.name}
                 onChange={(e) => setFormData({ ...formData, name: e.target.value })}
                 placeholder="e.g., Customer API"
-                className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-red-500 focus:border-transparent outline-none"
+                style={{
+                  width: '100%',
+                  padding: '0.5rem 1rem',
+                  backgroundColor: colors.inputBg,
+                  color: colors.text,
+                  border: `1px solid ${colors.inputBorder}`,
+                  borderRadius: '0.5rem',
+                  outline: 'none'
+                }}
               />
             </div>
 
             <div className="grid grid-cols-4 gap-3">
               <div className="col-span-1">
-                <label className="block text-sm font-medium text-gray-700 mb-2">Method</label>
+                <label style={{ display: 'block', fontSize: '0.875rem', fontWeight: 500, color: colors.text, marginBottom: '0.5rem' }}>Method</label>
                 <select
                   value={formData.method}
                   onChange={(e) => setFormData({ ...formData, method: e.target.value })}
-                  className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-red-500 outline-none"
+                  style={{
+                    width: '100%',
+                    padding: '0.5rem 1rem',
+                    backgroundColor: colors.inputBg,
+                    color: colors.text,
+                    border: `1px solid ${colors.inputBorder}`,
+                    borderRadius: '0.5rem',
+                    outline: 'none'
+                  }}
                   required
                 >
-                  <option value="">Select method...</option>
-                  <option value="GET">GET</option>
-                  <option value="POST">POST</option>
-                  <option value="PUT">PUT</option>
-                  <option value="DELETE">DELETE</option>
+                  <option value="" style={{ backgroundColor: isDark ? '#1a1a2e' : '#ffffff', color: isDark ? '#f1f5f9' : '#1e293b' }}>Select method...</option>
+                  <option value="GET" style={{ backgroundColor: isDark ? '#1a1a2e' : '#ffffff', color: isDark ? '#f1f5f9' : '#1e293b' }}>GET</option>
+                  <option value="POST" style={{ backgroundColor: isDark ? '#1a1a2e' : '#ffffff', color: isDark ? '#f1f5f9' : '#1e293b' }}>POST</option>
+                  <option value="PUT" style={{ backgroundColor: isDark ? '#1a1a2e' : '#ffffff', color: isDark ? '#f1f5f9' : '#1e293b' }}>PUT</option>
+                  <option value="DELETE" style={{ backgroundColor: isDark ? '#1a1a2e' : '#ffffff', color: isDark ? '#f1f5f9' : '#1e293b' }}>DELETE</option>
                 </select>
               </div>
               <div className="col-span-3">
-                <label className="block text-sm font-medium text-gray-700 mb-2">
-                  API URL <span className="text-red-500">*</span>
+                <label style={{ display: 'block', fontSize: '0.875rem', fontWeight: 500, color: colors.text, marginBottom: '0.5rem' }}>
+                  API URL <span style={{ color: palette.red }}>*</span>
                 </label>
                 <input
                   type="url"
@@ -640,9 +690,9 @@ export default function APIConfigModal({ isOpen, onClose, onSave, editingConfig 
                       const urlObj = new URL(fullUrl);
                       const baseUrl = `${urlObj.protocol}//${urlObj.host}`;
                       const endpoint = urlObj.pathname + urlObj.search;
-                      
-                      setFormData({ 
-                        ...formData, 
+
+                      setFormData({
+                        ...formData,
                         url: baseUrl,
                         endpoint: endpoint || formData.endpoint // Only update if endpoint exists in URL
                       });
@@ -652,16 +702,24 @@ export default function APIConfigModal({ isOpen, onClose, onSave, editingConfig 
                     }
                   }}
                   placeholder="Enter API URL (e.g., https://api.yourservice.com/data)"
-                  className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-red-500 focus:border-transparent outline-none"
+                  style={{
+                    width: '100%',
+                    padding: '0.5rem 1rem',
+                    backgroundColor: colors.inputBg,
+                    color: colors.text,
+                    border: `1px solid ${colors.inputBorder}`,
+                    borderRadius: '0.5rem',
+                    outline: 'none'
+                  }}
                 />
-                <p className="mt-1 text-xs text-gray-500">
+                <p style={{ marginTop: '0.25rem', fontSize: '0.75rem', color: colors.muted }}>
                   Enter full URL to auto-split into base URL and endpoint
                 </p>
               </div>
             </div>
 
-            <div>
-              <label className="block text-sm font-medium text-gray-700 mb-2">
+            <div style={{ marginBottom: '1rem' }}>
+              <label style={{ display: 'block', fontSize: '0.875rem', fontWeight: 500, color: colors.text, marginBottom: '0.5rem' }}>
                 Endpoint (optional, if not in URL)
               </label>
               <input
@@ -669,44 +727,78 @@ export default function APIConfigModal({ isOpen, onClose, onSave, editingConfig 
                 value={formData.endpoint}
                 onChange={(e) => setFormData({ ...formData, endpoint: e.target.value })}
                 placeholder="/api/v1/data"
-                className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-red-500 focus:border-transparent outline-none"
+                style={{
+                  width: '100%',
+                  padding: '0.5rem 1rem',
+                  backgroundColor: colors.inputBg,
+                  color: colors.text,
+                  border: `1px solid ${colors.inputBorder}`,
+                  borderRadius: '0.5rem',
+                  outline: 'none'
+                }}
               />
             </div>
           </div>
 
           {/* Authentication */}
-          <div className="space-y-4">
-            <h3 className="font-semibold text-gray-900">Authentication</h3>
+          <div style={{ marginBottom: '1.5rem' }}>
+            <h3 style={{ fontWeight: 600, color: colors.text, marginBottom: '1rem' }}>Authentication</h3>
 
-            <div>
-              <label className="block text-sm font-medium text-gray-700 mb-2">Auth Type</label>
+            <div style={{ marginBottom: '1rem' }}>
+              <label style={{ display: 'block', fontSize: '0.875rem', fontWeight: 500, color: colors.text, marginBottom: '0.5rem' }}>Auth Type</label>
               <select
                 value={formData.authType}
                 onChange={(e) => setFormData({ ...formData, authType: e.target.value })}
-                className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-red-500 outline-none"
+                style={{
+                  width: '100%',
+                  padding: '0.5rem 1rem',
+                  backgroundColor: colors.inputBg,
+                  color: colors.text,
+                  border: `1px solid ${colors.inputBorder}`,
+                  borderRadius: '0.5rem',
+                  outline: 'none'
+                }}
               >
-                <option value="none">None</option>
-                <option value="bearer">Bearer Token</option>
-                <option value="basic">Basic Auth</option>
-                <option value="api_key">API Key</option>
+                <option value="none" style={{ backgroundColor: isDark ? '#1a1a2e' : '#ffffff', color: isDark ? '#f1f5f9' : '#1e293b' }}>None</option>
+                <option value="bearer" style={{ backgroundColor: isDark ? '#1a1a2e' : '#ffffff', color: isDark ? '#f1f5f9' : '#1e293b' }}>Bearer Token</option>
+                <option value="basic" style={{ backgroundColor: isDark ? '#1a1a2e' : '#ffffff', color: isDark ? '#f1f5f9' : '#1e293b' }}>Basic Auth</option>
+                <option value="api_key" style={{ backgroundColor: isDark ? '#1a1a2e' : '#ffffff', color: isDark ? '#f1f5f9' : '#1e293b' }}>API Key</option>
               </select>
             </div>
 
             {formData.authType === 'bearer' && (
-              <div>
-                <label className="block text-sm font-medium text-gray-700 mb-2">Bearer Token</label>
-                <div className="relative">
+              <div style={{ marginBottom: '1rem' }}>
+                <label style={{ display: 'block', fontSize: '0.875rem', fontWeight: 500, color: colors.text, marginBottom: '0.5rem' }}>Bearer Token</label>
+                <div style={{ position: 'relative' }}>
                   <input
                     type={showBearerToken ? 'text' : 'password'}
                     value={formData.authToken}
                     onChange={(e) => setFormData({ ...formData, authToken: e.target.value })}
                     placeholder="Enter your bearer token"
-                    className="w-full px-4 py-2 pr-10 border border-gray-300 rounded-lg focus:ring-2 focus:ring-red-500 outline-none"
+                    style={{
+                      width: '100%',
+                      padding: '0.5rem 1rem',
+                      paddingRight: '2.5rem',
+                      backgroundColor: colors.inputBg,
+                      color: colors.text,
+                      border: `1px solid ${colors.inputBorder}`,
+                      borderRadius: '0.5rem',
+                      outline: 'none'
+                    }}
                   />
                   <button
                     type="button"
                     onClick={() => setShowBearerToken(!showBearerToken)}
-                    className="absolute right-3 top-1/2 -translate-y-1/2 text-gray-500 hover:text-gray-700 focus:outline-none"
+                    style={{
+                      position: 'absolute',
+                      right: '0.75rem',
+                      top: '50%',
+                      transform: 'translateY(-50%)',
+                      color: colors.muted,
+                      background: 'none',
+                      border: 'none',
+                      cursor: 'pointer'
+                    }}
                     aria-label={showBearerToken ? 'Hide bearer token' : 'Show bearer token'}
                   >
                     {showBearerToken ? (
@@ -722,29 +814,55 @@ export default function APIConfigModal({ isOpen, onClose, onSave, editingConfig 
             {formData.authType === 'basic' && (
               <div className="grid grid-cols-2 gap-3">
                 <div>
-                  <label className="block text-sm font-medium text-gray-700 mb-2">Username</label>
+                  <label style={{ display: 'block', fontSize: '0.875rem', fontWeight: 500, color: colors.text, marginBottom: '0.5rem' }}>Username</label>
                   <input
                     type="text"
                     value={formData.authUsername}
                     onChange={(e) => setFormData({ ...formData, authUsername: e.target.value })}
                     placeholder="Username"
-                    className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-red-500 outline-none"
+                    style={{
+                      width: '100%',
+                      padding: '0.5rem 1rem',
+                      backgroundColor: colors.inputBg,
+                      color: colors.text,
+                      border: `1px solid ${colors.inputBorder}`,
+                      borderRadius: '0.5rem',
+                      outline: 'none'
+                    }}
                   />
                 </div>
                 <div>
-                  <label className="block text-sm font-medium text-gray-700 mb-2">Password</label>
-                  <div className="relative">
+                  <label style={{ display: 'block', fontSize: '0.875rem', fontWeight: 500, color: colors.text, marginBottom: '0.5rem' }}>Password</label>
+                  <div style={{ position: 'relative' }}>
                     <input
                       type={showPassword ? 'text' : 'password'}
                       value={formData.authPassword}
                       onChange={(e) => setFormData({ ...formData, authPassword: e.target.value })}
                       placeholder="Password"
-                      className="w-full px-4 py-2 pr-10 border border-gray-300 rounded-lg focus:ring-2 focus:ring-red-500 outline-none"
+                      style={{
+                        width: '100%',
+                        padding: '0.5rem 1rem',
+                        paddingRight: '2.5rem',
+                        backgroundColor: colors.inputBg,
+                        color: colors.text,
+                        border: `1px solid ${colors.inputBorder}`,
+                        borderRadius: '0.5rem',
+                        outline: 'none'
+                      }}
                     />
                     <button
                       type="button"
                       onClick={() => setShowPassword(!showPassword)}
-                      className="absolute right-3 top-1/2 -translate-y-1/2 text-gray-500 hover:text-gray-700 focus:outline-none"
+                      style={{
+                        position: 'absolute',
+                        right: '0.75rem',
+                        top: '50%',
+                        transform: 'translateY(-50%)',
+                        color: colors.muted,
+                        background: 'none',
+                        border: 'none',
+                        cursor: 'pointer'
+                      }}
                       aria-label={showPassword ? 'Hide password' : 'Show password'}
                     >
                       {showPassword ? (
@@ -760,23 +878,41 @@ export default function APIConfigModal({ isOpen, onClose, onSave, editingConfig 
 
             {formData.authType === 'api_key' && (
               <>
-                <div>
-                  <label className="block text-sm font-medium text-gray-700 mb-2">
-                    API Key <span className="text-red-500">*</span>
+                <div style={{ marginBottom: '1rem' }}>
+                  <label style={{ display: 'block', fontSize: '0.875rem', fontWeight: 500, color: colors.text, marginBottom: '0.5rem' }}>
+                    API Key <span style={{ color: palette.red }}>*</span>
                   </label>
-                  <div className="relative">
+                  <div style={{ position: 'relative' }}>
                     <input
                       type={showApiKey ? 'text' : 'password'}
                       value={formData.authToken}
                       onChange={(e) => setFormData({ ...formData, authToken: e.target.value })}
                       placeholder="Enter your API key"
-                      className="w-full px-4 py-2 pr-10 border border-gray-300 rounded-lg focus:ring-2 focus:ring-red-500 outline-none"
+                      style={{
+                        width: '100%',
+                        padding: '0.5rem 1rem',
+                        paddingRight: '2.5rem',
+                        backgroundColor: colors.inputBg,
+                        color: colors.text,
+                        border: `1px solid ${colors.inputBorder}`,
+                        borderRadius: '0.5rem',
+                        outline: 'none'
+                      }}
                       required
                     />
                     <button
                       type="button"
                       onClick={() => setShowApiKey(!showApiKey)}
-                      className="absolute right-3 top-1/2 -translate-y-1/2 text-gray-500 hover:text-gray-700 focus:outline-none"
+                      style={{
+                        position: 'absolute',
+                        right: '0.75rem',
+                        top: '50%',
+                        transform: 'translateY(-50%)',
+                        color: colors.muted,
+                        background: 'none',
+                        border: 'none',
+                        cursor: 'pointer'
+                      }}
                       aria-label={showApiKey ? 'Hide API key' : 'Show API key'}
                     >
                       {showApiKey ? (
@@ -787,9 +923,9 @@ export default function APIConfigModal({ isOpen, onClose, onSave, editingConfig 
                     </button>
                   </div>
                 </div>
-                <div>
-                  <label className="block text-sm font-medium text-gray-700 mb-2">
-                    Header Name <span className="text-red-500">*</span>
+                <div style={{ marginBottom: '1rem' }}>
+                  <label style={{ display: 'block', fontSize: '0.875rem', fontWeight: 500, color: colors.text, marginBottom: '0.5rem' }}>
+                    Header Name <span style={{ color: palette.red }}>*</span>
                   </label>
                   <select
                     value={isCustomHeader ? '__custom__' : formData.apiKeyHeader}
@@ -802,30 +938,38 @@ export default function APIConfigModal({ isOpen, onClose, onSave, editingConfig 
                         setFormData({ ...formData, apiKeyHeader: e.target.value });
                       }
                     }}
-                    className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-red-500 outline-none"
+                    style={{
+                      width: '100%',
+                      padding: '0.5rem 1rem',
+                      backgroundColor: colors.inputBg,
+                      color: colors.text,
+                      border: `1px solid ${colors.inputBorder}`,
+                      borderRadius: '0.5rem',
+                      outline: 'none'
+                    }}
                     required
                   >
-                    <option value="">Select header name...</option>
-                    <option value="X-API-Key">X-API-Key</option>
-                    <option value="X-Api-Key">X-Api-Key</option>
-                    <option value="X-API-KEY">X-API-KEY</option>
-                    <option value="Api-Key">Api-Key</option>
-                    <option value="API-Key">API-Key</option>
-                    <option value="X-Auth-Token">X-Auth-Token</option>
-                    <option value="X-AuthToken">X-AuthToken</option>
-                    <option value="X-Token">X-Token</option>
-                    <option value="Authorization">Authorization</option>
-                    <option value="api-key">api-key</option>
-                    <option value="apikey">apikey</option>
-                    <option value="X-RapidAPI-Key">X-RapidAPI-Key</option>
-                    <option value="X-Application-Key">X-Application-Key</option>
-                    <option value="X-Client-Key">X-Client-Key</option>
-                    <option value="X-Secret-Key">X-Secret-Key</option>
-                    <option value="X-Access-Key">X-Access-Key</option>
-                    <option value="X-Project-Key">X-Project-Key</option>
-                    <option value="X-Subscription-Key">X-Subscription-Key</option>
-                    <option value="Ocp-Apim-Subscription-Key">Ocp-Apim-Subscription-Key</option>
-                    <option value="__custom__">Custom (enter below)</option>
+                    <option value="" style={{ backgroundColor: isDark ? '#1a1a2e' : '#ffffff', color: isDark ? '#f1f5f9' : '#1e293b' }}>Select header name...</option>
+                    <option value="X-API-Key" style={{ backgroundColor: isDark ? '#1a1a2e' : '#ffffff', color: isDark ? '#f1f5f9' : '#1e293b' }}>X-API-Key</option>
+                    <option value="X-Api-Key" style={{ backgroundColor: isDark ? '#1a1a2e' : '#ffffff', color: isDark ? '#f1f5f9' : '#1e293b' }}>X-Api-Key</option>
+                    <option value="X-API-KEY" style={{ backgroundColor: isDark ? '#1a1a2e' : '#ffffff', color: isDark ? '#f1f5f9' : '#1e293b' }}>X-API-KEY</option>
+                    <option value="Api-Key" style={{ backgroundColor: isDark ? '#1a1a2e' : '#ffffff', color: isDark ? '#f1f5f9' : '#1e293b' }}>Api-Key</option>
+                    <option value="API-Key" style={{ backgroundColor: isDark ? '#1a1a2e' : '#ffffff', color: isDark ? '#f1f5f9' : '#1e293b' }}>API-Key</option>
+                    <option value="X-Auth-Token" style={{ backgroundColor: isDark ? '#1a1a2e' : '#ffffff', color: isDark ? '#f1f5f9' : '#1e293b' }}>X-Auth-Token</option>
+                    <option value="X-AuthToken" style={{ backgroundColor: isDark ? '#1a1a2e' : '#ffffff', color: isDark ? '#f1f5f9' : '#1e293b' }}>X-AuthToken</option>
+                    <option value="X-Token" style={{ backgroundColor: isDark ? '#1a1a2e' : '#ffffff', color: isDark ? '#f1f5f9' : '#1e293b' }}>X-Token</option>
+                    <option value="Authorization" style={{ backgroundColor: isDark ? '#1a1a2e' : '#ffffff', color: isDark ? '#f1f5f9' : '#1e293b' }}>Authorization</option>
+                    <option value="api-key" style={{ backgroundColor: isDark ? '#1a1a2e' : '#ffffff', color: isDark ? '#f1f5f9' : '#1e293b' }}>api-key</option>
+                    <option value="apikey" style={{ backgroundColor: isDark ? '#1a1a2e' : '#ffffff', color: isDark ? '#f1f5f9' : '#1e293b' }}>apikey</option>
+                    <option value="X-RapidAPI-Key" style={{ backgroundColor: isDark ? '#1a1a2e' : '#ffffff', color: isDark ? '#f1f5f9' : '#1e293b' }}>X-RapidAPI-Key</option>
+                    <option value="X-Application-Key" style={{ backgroundColor: isDark ? '#1a1a2e' : '#ffffff', color: isDark ? '#f1f5f9' : '#1e293b' }}>X-Application-Key</option>
+                    <option value="X-Client-Key" style={{ backgroundColor: isDark ? '#1a1a2e' : '#ffffff', color: isDark ? '#f1f5f9' : '#1e293b' }}>X-Client-Key</option>
+                    <option value="X-Secret-Key" style={{ backgroundColor: isDark ? '#1a1a2e' : '#ffffff', color: isDark ? '#f1f5f9' : '#1e293b' }}>X-Secret-Key</option>
+                    <option value="X-Access-Key" style={{ backgroundColor: isDark ? '#1a1a2e' : '#ffffff', color: isDark ? '#f1f5f9' : '#1e293b' }}>X-Access-Key</option>
+                    <option value="X-Project-Key" style={{ backgroundColor: isDark ? '#1a1a2e' : '#ffffff', color: isDark ? '#f1f5f9' : '#1e293b' }}>X-Project-Key</option>
+                    <option value="X-Subscription-Key" style={{ backgroundColor: isDark ? '#1a1a2e' : '#ffffff', color: isDark ? '#f1f5f9' : '#1e293b' }}>X-Subscription-Key</option>
+                    <option value="Ocp-Apim-Subscription-Key" style={{ backgroundColor: isDark ? '#1a1a2e' : '#ffffff', color: isDark ? '#f1f5f9' : '#1e293b' }}>Ocp-Apim-Subscription-Key</option>
+                    <option value="__custom__" style={{ backgroundColor: isDark ? '#1a1a2e' : '#ffffff', color: isDark ? '#f1f5f9' : '#1e293b' }}>Custom (enter below)</option>
                   </select>
                   {isCustomHeader && (
                     <input
@@ -833,11 +977,20 @@ export default function APIConfigModal({ isOpen, onClose, onSave, editingConfig 
                       value={formData.apiKeyHeader}
                       onChange={(e) => setFormData({ ...formData, apiKeyHeader: e.target.value })}
                       placeholder="Enter custom header name (e.g., My-Custom-Header)"
-                      className="w-full mt-2 px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-red-500 outline-none"
+                      style={{
+                        width: '100%',
+                        marginTop: '0.5rem',
+                        padding: '0.5rem 1rem',
+                        backgroundColor: colors.inputBg,
+                        color: colors.text,
+                        border: `1px solid ${colors.inputBorder}`,
+                        borderRadius: '0.5rem',
+                        outline: 'none'
+                      }}
                       required
                     />
                   )}
-                  <p className="mt-1 text-xs text-gray-500">
+                  <p style={{ marginTop: '0.25rem', fontSize: '0.75rem', color: colors.muted }}>
                     Select from common header names or choose "Custom" to enter your own
                   </p>
                 </div>
@@ -846,36 +999,61 @@ export default function APIConfigModal({ isOpen, onClose, onSave, editingConfig 
           </div>
 
           {/* Headers */}
-          <div className="space-y-4">
-            <div className="flex items-center justify-between">
-              <h3 className="font-semibold text-gray-900">Headers</h3>
+          <div style={{ marginBottom: '1.5rem' }}>
+            <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: '1rem' }}>
+              <h3 style={{ fontWeight: 600, color: colors.text }}>Headers</h3>
               <button
                 onClick={addHeader}
-                className="text-sm text-red-600 hover:text-red-700 font-medium"
+                style={{ fontSize: '0.875rem', color: palette.red, fontWeight: 500, background: 'none', border: 'none', cursor: 'pointer' }}
               >
                 + Add Header
               </button>
             </div>
 
             {formData.headers.map((header, index) => (
-              <div key={index} className="flex gap-3">
+              <div key={index} style={{ display: 'flex', gap: '0.75rem', marginBottom: '0.5rem' }}>
                 <input
                   type="text"
                   value={header.key}
                   onChange={(e) => updateHeader(index, 'key', e.target.value)}
                   placeholder="Header name"
-                  className="flex-1 px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-red-500 outline-none text-sm"
+                  style={{
+                    flex: 1,
+                    padding: '0.5rem 1rem',
+                    backgroundColor: colors.inputBg,
+                    color: colors.text,
+                    border: `1px solid ${colors.inputBorder}`,
+                    borderRadius: '0.5rem',
+                    outline: 'none',
+                    fontSize: '0.875rem'
+                  }}
                 />
                 <input
                   type="text"
                   value={header.value}
                   onChange={(e) => updateHeader(index, 'value', e.target.value)}
                   placeholder="Header value"
-                  className="flex-1 px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-red-500 outline-none text-sm"
+                  style={{
+                    flex: 1,
+                    padding: '0.5rem 1rem',
+                    backgroundColor: colors.inputBg,
+                    color: colors.text,
+                    border: `1px solid ${colors.inputBorder}`,
+                    borderRadius: '0.5rem',
+                    outline: 'none',
+                    fontSize: '0.875rem'
+                  }}
                 />
                 <button
                   onClick={() => removeHeader(index)}
-                  className="px-3 py-2 text-red-600 hover:bg-red-50 rounded-lg transition-colors"
+                  style={{
+                    padding: '0.5rem 0.75rem',
+                    color: palette.red,
+                    background: 'none',
+                    border: 'none',
+                    borderRadius: '0.5rem',
+                    cursor: 'pointer'
+                  }}
                 >
                   <X className="w-4 h-4" />
                 </button>
@@ -884,29 +1062,55 @@ export default function APIConfigModal({ isOpen, onClose, onSave, editingConfig 
           </div>
 
           {/* Auto-fetch option */}
-          <div className="flex items-center gap-2 p-4 bg-blue-50 rounded-lg">
+          <div style={{
+            display: 'flex',
+            alignItems: 'center',
+            gap: '0.5rem',
+            padding: '1rem',
+            backgroundColor: `${palette.blue}20`,
+            borderRadius: '0.5rem',
+            marginBottom: '1.5rem'
+          }}>
             <input
               type="checkbox"
               id="autoFetch"
               checked={autoFetch}
               onChange={(e) => setAutoFetch(e.target.checked)}
-              className="w-4 h-4 text-red-600 rounded focus:ring-red-500"
+              style={{ width: '1rem', height: '1rem' }}
             />
-            <label htmlFor="autoFetch" className="text-sm text-gray-700">
+            <label htmlFor="autoFetch" style={{ fontSize: '0.875rem', color: colors.text }}>
               Automatically fetch data after creating configuration (creates dataset)
             </label>
           </div>
 
           {/* Status Messages */}
           {testStatus === 'success' && (
-            <div className="flex items-center text-sm text-green-700 bg-green-50 px-4 py-3 rounded-lg">
+            <div style={{
+              display: 'flex',
+              alignItems: 'center',
+              fontSize: '0.875rem',
+              color: palette.green,
+              backgroundColor: `${palette.green}20`,
+              padding: '0.75rem 1rem',
+              borderRadius: '0.5rem',
+              marginBottom: '1rem'
+            }}>
               <CheckCircle className="w-5 h-5 mr-2" />
               {testMessage}
             </div>
           )}
 
           {testStatus === 'error' && testMessage && (
-            <div className="flex items-center text-sm text-red-700 bg-red-50 px-4 py-3 rounded-lg">
+            <div style={{
+              display: 'flex',
+              alignItems: 'center',
+              fontSize: '0.875rem',
+              color: palette.red,
+              backgroundColor: `${palette.red}20`,
+              padding: '0.75rem 1rem',
+              borderRadius: '0.5rem',
+              marginBottom: '1rem'
+            }}>
               <AlertCircle className="w-5 h-5 mr-2" />
               {testMessage}
             </div>
@@ -914,11 +1118,28 @@ export default function APIConfigModal({ isOpen, onClose, onSave, editingConfig 
         </div>
 
         {/* Footer */}
-        <div className="flex items-center justify-between px-6 py-4 border-t border-gray-200 bg-gray-50">
+        <div style={{
+          display: 'flex',
+          alignItems: 'center',
+          justifyContent: 'space-between',
+          padding: '1rem 1.5rem',
+          borderTop: `1px solid ${colors.cardBorder}`,
+          backgroundColor: colors.tableBg
+        }}>
           <button
             onClick={handleTestConnection}
             disabled={testStatus === 'loading'}
-            className="px-4 py-2 text-red-600 border border-red-600 rounded-lg hover:bg-red-50 transition-colors flex items-center disabled:opacity-50"
+            style={{
+              padding: '0.5rem 1rem',
+              color: palette.red,
+              border: `1px solid ${palette.red}`,
+              borderRadius: '0.5rem',
+              background: 'none',
+              cursor: 'pointer',
+              display: 'flex',
+              alignItems: 'center',
+              opacity: testStatus === 'loading' ? 0.5 : 1
+            }}
           >
             {testStatus === 'loading' ? (
               <Loader2 className="w-4 h-4 mr-2 animate-spin" />
@@ -928,18 +1149,37 @@ export default function APIConfigModal({ isOpen, onClose, onSave, editingConfig 
             Test Connection
           </button>
 
-          <div className="flex items-center gap-3">
+          <div style={{ display: 'flex', alignItems: 'center', gap: '0.75rem' }}>
             <button
               onClick={onClose}
               disabled={saving || savingDraft}
-              className="px-4 py-2 text-gray-700 hover:bg-gray-200 rounded-lg transition-colors disabled:opacity-50"
+              style={{
+                padding: '0.5rem 1rem',
+                color: colors.text,
+                background: 'none',
+                border: 'none',
+                borderRadius: '0.5rem',
+                cursor: 'pointer',
+                opacity: (saving || savingDraft) ? 0.5 : 1
+              }}
             >
               Cancel
             </button>
             <button
               onClick={handleSaveDraft}
               disabled={saving || savingDraft}
-              className="px-4 py-2 text-gray-600 border border-gray-300 rounded-lg hover:bg-gray-50 transition-colors disabled:opacity-50 flex items-center gap-2"
+              style={{
+                padding: '0.5rem 1rem',
+                color: colors.muted,
+                border: `1px solid ${colors.inputBorder}`,
+                borderRadius: '0.5rem',
+                background: 'none',
+                cursor: 'pointer',
+                display: 'flex',
+                alignItems: 'center',
+                gap: '0.5rem',
+                opacity: (saving || savingDraft) ? 0.5 : 1
+              }}
             >
               {savingDraft && <Loader2 className="w-4 h-4 animate-spin" />}
               Save as Draft
@@ -947,7 +1187,18 @@ export default function APIConfigModal({ isOpen, onClose, onSave, editingConfig 
             <button
               onClick={handleSave}
               disabled={saving || savingDraft}
-              className="px-4 py-2 bg-red-600 text-white rounded-lg hover:bg-red-700 transition-colors disabled:opacity-50 flex items-center gap-2"
+              style={{
+                padding: '0.5rem 1rem',
+                backgroundColor: '#dc2626',
+                color: 'white',
+                border: 'none',
+                borderRadius: '0.5rem',
+                cursor: 'pointer',
+                display: 'flex',
+                alignItems: 'center',
+                gap: '0.5rem',
+                opacity: (saving || savingDraft) ? 0.5 : 1
+              }}
             >
               {saving && <Loader2 className="w-4 h-4 animate-spin" />}
               Save & Fetch Data

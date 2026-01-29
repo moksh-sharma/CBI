@@ -7,11 +7,16 @@
     "dev": "concurrently \"npm run server\" \"npm run client\"",
     "dev:safe": "node scripts/start-dev.js",
     "server": "cd backend && npm run dev",
-    "client": "cd frontend && npm start",
+    "client": "cd frontend && npm run dev",
     "install-all": "node scripts/install-all.js",
     "install-all:legacy": "npm install && cd backend && npm install && cd ../frontend && npm install"
   },
-  "keywords": ["bi", "visualization", "dashboard", "enterprise"],
+  "keywords": [
+    "bi",
+    "visualization",
+    "dashboard",
+    "enterprise"
+  ],
   "author": "",
   "license": "ISC",
   "devDependencies": {

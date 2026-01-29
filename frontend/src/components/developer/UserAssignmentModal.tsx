@@ -1,6 +1,8 @@
 import { useState, useEffect, useCallback } from 'react';
 import { X, UserPlus, Search, CheckCircle, Loader2 } from 'lucide-react';
 import { apiGet, apiPost } from '../../lib/api';
+import { useTheme } from '../../contexts/ThemeContext';
+import { getThemeColors } from '../../lib/themeColors';
 
 interface User {
   id: number;
@@ -35,6 +37,9 @@ export default function UserAssignmentModal({
   const [selectedUserIds, setSelectedUserIds] = useState<Set<number>>(new Set());
   const [existingAssignments, setExistingAssignments] = useState<number[]>([]);
   const [dashboardName, setDashboardName] = useState(initialDashboardName);
+
+  const { isDark } = useTheme();
+  const colors = getThemeColors(isDark);
 
   const fetchUsers = useCallback(async () => {
     setLoading(true);
@@ -125,15 +130,16 @@ export default function UserAssignmentModal({
 
   return (
     <div className="fixed inset-0 bg-black bg-opacity-50 backdrop-blur-sm flex items-center justify-center z-[99999]" style={{ zIndex: 99999 }}>
-      <div className="bg-white rounded-lg shadow-xl w-full max-w-2xl max-h-[90vh] flex flex-col relative" style={{ zIndex: 100000 }}>
-        <div className="flex items-center justify-between p-6 border-b border-gray-200">
+      <div style={{ backgroundColor: colors.modalBg, borderColor: colors.cardBorder }} className="rounded-lg shadow-xl w-full max-w-2xl max-h-[90vh] flex flex-col relative border" style={{ zIndex: 100000, backgroundColor: colors.modalBg }}>
+        <div style={{ borderColor: colors.cardBorder }} className="flex items-center justify-between p-6 border-b">
           <div>
-            <h2 className="text-xl font-semibold text-gray-900">Publish Dashboard</h2>
-            <p className="text-sm text-gray-600 mt-1">Select users to assign this dashboard to</p>
+            <h2 style={{ color: colors.text }} className="text-xl font-semibold">Publish Dashboard</h2>
+            <p style={{ color: colors.muted }} className="text-sm mt-1">Select users to assign this dashboard to</p>
           </div>
           <button
             onClick={onClose}
-            className="text-gray-400 hover:text-gray-600 transition-colors"
+            style={{ color: colors.muted }}
+            className="hover:opacity-70 transition-colors"
             disabled={publishing}
           >
             <X className="w-5 h-5" />
@@ -143,7 +149,7 @@ export default function UserAssignmentModal({
         <div className="flex-1 overflow-y-auto p-6">
           {/* Dashboard Name Input */}
           <div className="mb-4">
-            <label htmlFor="dashboard-name" className="block text-sm font-medium text-gray-700 mb-2">
+            <label htmlFor="dashboard-name" style={{ color: colors.text }} className="block text-sm font-medium mb-2">
               Dashboard Name <span className="text-red-500">*</span>
             </label>
             <input
@@ -155,9 +161,12 @@ export default function UserAssignmentModal({
                 if (error) setError(null);
               }}
               placeholder="Enter dashboard name..."
-              className={`w-full px-4 py-2 border rounded-lg focus:ring-2 focus:ring-indigo-500 focus:border-transparent outline-none ${
-                error && !dashboardName.trim() ? 'border-red-500' : 'border-gray-300'
-              }`}
+              style={{
+                backgroundColor: colors.inputBg,
+                borderColor: error && !dashboardName.trim() ? '#ef4444' : colors.inputBorder,
+                color: colors.text
+              }}
+              className="w-full px-4 py-2 border rounded-lg focus:ring-2 focus:ring-indigo-500 focus:border-transparent outline-none"
               disabled={publishing}
             />
             {error && !dashboardName.trim() && (
@@ -167,13 +176,18 @@ export default function UserAssignmentModal({
 
           {/* Search */}
           <div className="relative mb-4">
-            <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-5 h-5 text-gray-400" />
+            <Search style={{ color: colors.muted }} className="absolute left-3 top-1/2 -translate-y-1/2 w-5 h-5" />
             <input
               type="text"
               value={searchTerm}
               onChange={(e) => setSearchTerm(e.target.value)}
               placeholder="Search users by name or email..."
-              className="w-full pl-10 pr-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-indigo-500 focus:border-transparent outline-none"
+              style={{
+                backgroundColor: colors.inputBg,
+                borderColor: colors.inputBorder,
+                color: colors.text
+              }}
+              className="w-full pl-10 pr-4 py-2 border rounded-lg focus:ring-2 focus:ring-indigo-500 focus:border-transparent outline-none"
             />
           </div>
 
@@ -187,7 +201,7 @@ export default function UserAssignmentModal({
                   onChange={handleSelectAll}
                   className="w-4 h-4 text-indigo-600 rounded focus:ring-indigo-500"
                 />
-                <span className="text-sm font-medium text-gray-700">
+                <span style={{ color: colors.text }} className="text-sm font-medium">
                   Select All ({selectedUserIds.size} selected)
                 </span>
               </label>
@@ -207,15 +221,15 @@ export default function UserAssignmentModal({
               <Loader2 className="w-8 h-8 text-indigo-600 animate-spin" />
             </div>
           ) : error && !dashboardName.trim() ? (
-            <div className="text-center py-12 text-gray-500">
+            <div className="text-center py-12">
               <p className="text-red-600 mb-2">{error}</p>
-              <p className="text-sm text-gray-500">Please ensure you have permission to view users.</p>
+              <p style={{ color: colors.muted }} className="text-sm">Please ensure you have permission to view users.</p>
             </div>
           ) : filteredUsers.length === 0 ? (
-            <div className="text-center py-12 text-gray-500">
-              <p>No users found</p>
+            <div className="text-center py-12">
+              <p style={{ color: colors.muted }}>No users found</p>
               {searchTerm && (
-                <p className="text-sm mt-2">Try adjusting your search term</p>
+                <p style={{ color: colors.muted }} className="text-sm mt-2">Try adjusting your search term</p>
               )}
             </div>
           ) : (
@@ -227,33 +241,34 @@ export default function UserAssignmentModal({
                   <div
                     key={user.id}
                     onClick={() => toggleUserSelection(user.id)}
-                    className={`p-4 border rounded-lg cursor-pointer transition-colors ${
-                      isSelected
-                        ? 'border-indigo-500 bg-indigo-50'
-                        : 'border-gray-200 hover:border-gray-300 hover:bg-gray-50'
-                    }`}
+                    style={{
+                      backgroundColor: isSelected ? (isDark ? '#312e81' : '#eef2ff') : colors.cardBg,
+                      borderColor: isSelected ? '#6366f1' : colors.cardBorder
+                    }}
+                    className="p-4 border rounded-lg cursor-pointer transition-colors hover:opacity-90"
                   >
                     <div className="flex items-center justify-between">
                       <div className="flex items-center gap-3">
                         <div
-                          className={`w-10 h-10 rounded-full flex items-center justify-center ${
-                            isSelected ? 'bg-indigo-600' : 'bg-gray-200'
-                          }`}
+                          style={{
+                            backgroundColor: isSelected ? '#4f46e5' : (isDark ? '#374151' : '#e5e7eb')
+                          }}
+                          className="w-10 h-10 rounded-full flex items-center justify-center"
                         >
                           {isSelected ? (
                             <CheckCircle className="w-6 h-6 text-white" />
                           ) : (
-                            <span className="text-gray-600 font-medium">
+                            <span style={{ color: colors.muted }} className="font-medium">
                               {user.first_name[0]}{user.last_name[0]}
                             </span>
                           )}
                         </div>
                         <div>
-                          <p className="font-medium text-gray-900">
+                          <p style={{ color: colors.text }} className="font-medium">
                             {user.first_name} {user.last_name}
                           </p>
-                          <p className="text-sm text-gray-600">{user.email}</p>
-                          <p className="text-xs text-gray-500 capitalize">{user.role_name}</p>
+                          <p style={{ color: colors.muted }} className="text-sm">{user.email}</p>
+                          <p style={{ color: colors.muted }} className="text-xs capitalize">{user.role_name}</p>
                         </div>
                       </div>
                       {isExisting && (
@@ -269,11 +284,12 @@ export default function UserAssignmentModal({
           )}
         </div>
 
-        <div className="flex items-center justify-end gap-3 p-6 border-t border-gray-200">
+        <div style={{ borderColor: colors.cardBorder }} className="flex items-center justify-end gap-3 p-6 border-t">
           <button
             onClick={onClose}
             disabled={publishing}
-            className="px-4 py-2 text-gray-700 hover:bg-gray-100 rounded-lg transition-colors disabled:opacity-50"
+            style={{ color: colors.text }}
+            className="px-4 py-2 hover:opacity-70 rounded-lg transition-colors disabled:opacity-50"
           >
             Cancel
           </button>

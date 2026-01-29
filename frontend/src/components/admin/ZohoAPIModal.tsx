@@ -1,6 +1,8 @@
 import { useState } from 'react';
 import { X, CheckCircle, AlertCircle, Loader2, Link2 } from 'lucide-react';
 import { apiPost } from '../../lib/api';
+import { useTheme } from '../../contexts/ThemeContext';
+import { getThemeColors, getColorPalette } from '../../lib/themeColors';
 
 interface ZohoAPIModalProps {
   isOpen: boolean;
@@ -9,6 +11,10 @@ interface ZohoAPIModalProps {
 }
 
 export default function ZohoAPIModal({ isOpen, onClose, onSave }: ZohoAPIModalProps) {
+  const { isDark } = useTheme();
+  const colors = getThemeColors(isDark);
+  const palette = getColorPalette(isDark);
+
   const [formData, setFormData] = useState({
     name: '',
     zohoService: 'crm',
@@ -226,51 +232,51 @@ export default function ZohoAPIModal({ isOpen, onClose, onSave }: ZohoAPIModalPr
   };
 
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black bg-opacity-50 p-4">
-      <div className="bg-white rounded-lg shadow-xl w-full max-w-2xl max-h-[90vh] overflow-hidden flex flex-col">
+    <div style={{ position: 'fixed', inset: 0, zIndex: 50, display: 'flex', alignItems: 'center', justifyContent: 'center', backgroundColor: 'rgba(0,0,0,0.5)', padding: '1rem' }}>
+      <div style={{ backgroundColor: colors.cardBg, borderRadius: '0.5rem', boxShadow: '0 25px 50px -12px rgba(0, 0, 0, 0.25)', width: '100%', maxWidth: '42rem', maxHeight: '90vh', overflow: 'hidden', display: 'flex', flexDirection: 'column' }}>
         {/* Header */}
-        <div className="flex items-center justify-between px-6 py-4 border-b border-gray-200">
+        <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', padding: '1rem 1.5rem', borderBottom: `1px solid ${colors.cardBorder}` }}>
           <div>
-            <h2 className="text-xl font-semibold text-gray-900">Connect Zoho API</h2>
-            <p className="text-sm text-gray-600 mt-1">Configure Zoho service integration</p>
+            <h2 style={{ fontSize: '1.25rem', fontWeight: 600, color: colors.text }}>Connect Zoho API</h2>
+            <p style={{ fontSize: '0.875rem', color: colors.muted, marginTop: '0.25rem' }}>Configure Zoho service integration</p>
           </div>
           <button
             onClick={onClose}
-            className="p-1 text-gray-400 hover:text-gray-600 transition-colors"
+            style={{ padding: '0.25rem', color: colors.muted, backgroundColor: 'transparent', border: 'none', cursor: 'pointer', transition: 'color 0.2s' }}
           >
             <X className="w-5 h-5" />
           </button>
         </div>
 
         {/* Content - Scrollable */}
-        <div className="flex-1 overflow-y-auto p-6 space-y-6">
+        <div style={{ flex: 1, overflowY: 'auto', padding: '1.5rem', display: 'flex', flexDirection: 'column', gap: '1.5rem' }}>
           {/* Basic Info */}
-          <div className="space-y-4">
-            <h3 className="font-semibold text-gray-900">Basic Information</h3>
+          <div style={{ display: 'flex', flexDirection: 'column', gap: '1rem' }}>
+            <h3 style={{ fontWeight: 600, color: colors.text }}>Basic Information</h3>
 
             <div>
-              <label className="block text-sm font-medium text-gray-700 mb-2">
-                Data Source Name <span className="text-red-500">*</span>
+              <label style={{ display: 'block', fontSize: '0.875rem', fontWeight: 500, color: colors.text, marginBottom: '0.5rem' }}>
+                Data Source Name <span style={{ color: '#ef4444' }}>*</span>
               </label>
               <input
                 type="text"
                 value={formData.name}
                 onChange={(e) => setFormData({ ...formData, name: e.target.value })}
                 placeholder="e.g., Zoho CRM - Sales Data"
-                className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-purple-500 focus:border-transparent outline-none"
+                style={{ width: '100%', padding: '0.5rem 1rem', border: `1px solid ${colors.inputBorder}`, borderRadius: '0.5rem', outline: 'none', backgroundColor: colors.inputBg, color: colors.text }}
               />
             </div>
 
             <div>
-              <label className="block text-sm font-medium text-gray-700 mb-2">
-                Zoho Service <span className="text-red-500">*</span>
+              <label style={{ display: 'block', fontSize: '0.875rem', fontWeight: 500, color: colors.text, marginBottom: '0.5rem' }}>
+                Zoho Service <span style={{ color: '#ef4444' }}>*</span>
               </label>
               <select
                 value={formData.zohoService}
                 onChange={(e) =>
                   setFormData({ ...formData, zohoService: e.target.value, modules: [] })
                 }
-                className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-purple-500 outline-none"
+                style={{ width: '100%', padding: '0.5rem 1rem', border: `1px solid ${colors.inputBorder}`, borderRadius: '0.5rem', outline: 'none', backgroundColor: colors.inputBg, color: colors.text }}
               >
                 {zohoServices.map((service) => (
                   <option key={service.value} value={service.value}>
@@ -282,37 +288,37 @@ export default function ZohoAPIModal({ isOpen, onClose, onSave }: ZohoAPIModalPr
           </div>
 
           {/* OAuth Configuration */}
-          <div className="space-y-4">
-            <h3 className="font-semibold text-gray-900">OAuth 2.0 Configuration</h3>
+          <div style={{ display: 'flex', flexDirection: 'column', gap: '1rem' }}>
+            <h3 style={{ fontWeight: 600, color: colors.text }}>OAuth 2.0 Configuration</h3>
 
             <div>
-              <label className="block text-sm font-medium text-gray-700 mb-2">
-                Client ID <span className="text-red-500">*</span>
+              <label style={{ display: 'block', fontSize: '0.875rem', fontWeight: 500, color: colors.text, marginBottom: '0.5rem' }}>
+                Client ID <span style={{ color: '#ef4444' }}>*</span>
               </label>
               <input
                 type="text"
                 value={formData.clientId}
                 onChange={(e) => setFormData({ ...formData, clientId: e.target.value })}
                 placeholder="1000.XXXXXXXXXXXXXXXXXXXXXXXXXX"
-                className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-purple-500 outline-none font-mono text-sm"
+                style={{ width: '100%', padding: '0.5rem 1rem', border: `1px solid ${colors.inputBorder}`, borderRadius: '0.5rem', outline: 'none', backgroundColor: colors.inputBg, color: colors.text, fontFamily: 'monospace', fontSize: '0.875rem' }}
               />
             </div>
 
             <div>
-              <label className="block text-sm font-medium text-gray-700 mb-2">
-                Client Secret <span className="text-red-500">*</span>
+              <label style={{ display: 'block', fontSize: '0.875rem', fontWeight: 500, color: colors.text, marginBottom: '0.5rem' }}>
+                Client Secret <span style={{ color: '#ef4444' }}>*</span>
               </label>
               <input
                 type="password"
                 value={formData.clientSecret}
                 onChange={(e) => setFormData({ ...formData, clientSecret: e.target.value })}
                 placeholder="Enter your client secret"
-                className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-purple-500 outline-none font-mono text-sm"
+                style={{ width: '100%', padding: '0.5rem 1rem', border: `1px solid ${colors.inputBorder}`, borderRadius: '0.5rem', outline: 'none', backgroundColor: colors.inputBg, color: colors.text, fontFamily: 'monospace', fontSize: '0.875rem' }}
               />
             </div>
 
             <div>
-              <label className="block text-sm font-medium text-gray-700 mb-2">
+              <label style={{ display: 'block', fontSize: '0.875rem', fontWeight: 500, color: colors.text, marginBottom: '0.5rem' }}>
                 Refresh Token
               </label>
               <input
@@ -320,25 +326,25 @@ export default function ZohoAPIModal({ isOpen, onClose, onSave }: ZohoAPIModalPr
                 value={formData.refreshToken}
                 onChange={(e) => setFormData({ ...formData, refreshToken: e.target.value })}
                 placeholder="Optional: Enter refresh token"
-                className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-purple-500 outline-none font-mono text-sm"
+                style={{ width: '100%', padding: '0.5rem 1rem', border: `1px solid ${colors.inputBorder}`, borderRadius: '0.5rem', outline: 'none', backgroundColor: colors.inputBg, color: colors.text, fontFamily: 'monospace', fontSize: '0.875rem' }}
               />
-              <p className="text-xs text-gray-500 mt-1">
+              <p style={{ fontSize: '0.75rem', color: colors.muted, marginTop: '0.25rem' }}>
                 If not provided, you'll need to authorize via OAuth flow
               </p>
             </div>
           </div>
 
           {/* Region & API Version */}
-          <div className="space-y-4">
-            <h3 className="font-semibold text-gray-900">Configuration</h3>
+          <div style={{ display: 'flex', flexDirection: 'column', gap: '1rem' }}>
+            <h3 style={{ fontWeight: 600, color: colors.text }}>Configuration</h3>
 
-            <div className="grid grid-cols-2 gap-4">
+            <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '1rem' }}>
               <div>
-                <label className="block text-sm font-medium text-gray-700 mb-2">Data Center</label>
+                <label style={{ display: 'block', fontSize: '0.875rem', fontWeight: 500, color: colors.text, marginBottom: '0.5rem' }}>Data Center</label>
                 <select
                   value={formData.region}
                   onChange={(e) => setFormData({ ...formData, region: e.target.value })}
-                  className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-purple-500 outline-none"
+                  style={{ width: '100%', padding: '0.5rem 1rem', border: `1px solid ${colors.inputBorder}`, borderRadius: '0.5rem', outline: 'none', backgroundColor: colors.inputBg, color: colors.text }}
                 >
                   <option value="com">US (.com)</option>
                   <option value="eu">Europe (.eu)</option>
@@ -349,11 +355,11 @@ export default function ZohoAPIModal({ isOpen, onClose, onSave }: ZohoAPIModalPr
               </div>
 
               <div>
-                <label className="block text-sm font-medium text-gray-700 mb-2">API Version</label>
+                <label style={{ display: 'block', fontSize: '0.875rem', fontWeight: 500, color: colors.text, marginBottom: '0.5rem' }}>API Version</label>
                 <select
                   value={formData.apiVersion}
                   onChange={(e) => setFormData({ ...formData, apiVersion: e.target.value })}
-                  className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-purple-500 outline-none"
+                  style={{ width: '100%', padding: '0.5rem 1rem', border: `1px solid ${colors.inputBorder}`, borderRadius: '0.5rem', outline: 'none', backgroundColor: colors.inputBg, color: colors.text }}
                 >
                   <option value="v2">Version 2</option>
                   <option value="v3">Version 3 (if available)</option>
@@ -364,23 +370,23 @@ export default function ZohoAPIModal({ isOpen, onClose, onSave }: ZohoAPIModalPr
 
           {/* Modules Selection */}
           {getModulesForService().length > 0 && (
-            <div className="space-y-4">
-              <h3 className="font-semibold text-gray-900">
+            <div style={{ display: 'flex', flexDirection: 'column', gap: '1rem' }}>
+              <h3 style={{ fontWeight: 600, color: colors.text }}>
                 Select {formData.zohoService === 'crm' ? 'CRM' : 'Books'} Modules
               </h3>
-              <div className="grid grid-cols-2 gap-3">
+              <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '0.75rem' }}>
                 {getModulesForService().map((module) => (
                   <label
                     key={module}
-                    className="flex items-center p-3 border border-gray-300 rounded-lg cursor-pointer hover:bg-purple-50 transition-colors"
+                    style={{ display: 'flex', alignItems: 'center', padding: '0.75rem', border: `1px solid ${colors.inputBorder}`, borderRadius: '0.5rem', cursor: 'pointer', transition: 'background-color 0.2s' }}
                   >
                     <input
                       type="checkbox"
                       checked={formData.modules.includes(module)}
                       onChange={() => toggleModule(module)}
-                      className="w-4 h-4 text-purple-600 border-gray-300 rounded focus:ring-purple-500"
+                      style={{ width: '1rem', height: '1rem' }}
                     />
-                    <span className="ml-2 text-sm text-gray-900">{module}</span>
+                    <span style={{ marginLeft: '0.5rem', fontSize: '0.875rem', color: colors.text }}>{module}</span>
                   </label>
                 ))}
               </div>
@@ -388,25 +394,25 @@ export default function ZohoAPIModal({ isOpen, onClose, onSave }: ZohoAPIModalPr
           )}
 
           {/* Auto-fetch option */}
-          <div className="flex items-center gap-2 p-4 bg-blue-50 rounded-lg">
+          <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem', padding: '1rem', backgroundColor: palette.blue.bg, borderRadius: '0.5rem' }}>
             <input
               type="checkbox"
               id="autoFetchZoho"
               checked={autoFetch}
               onChange={(e) => setAutoFetch(e.target.checked)}
-              className="w-4 h-4 text-purple-600 rounded focus:ring-purple-500"
+              style={{ width: '1rem', height: '1rem' }}
             />
-            <label htmlFor="autoFetchZoho" className="text-sm text-gray-700">
+            <label htmlFor="autoFetchZoho" style={{ fontSize: '0.875rem', color: colors.text }}>
               Automatically fetch data after creating configuration (creates dataset)
             </label>
           </div>
 
           {/* Instructions */}
-          <div className="bg-blue-50 border border-blue-200 rounded-lg p-4">
-            <h4 className="text-sm font-medium text-blue-900 mb-2">
+          <div style={{ backgroundColor: palette.blue.bg, border: `1px solid ${isDark ? '#1e40af' : '#bfdbfe'}`, borderRadius: '0.5rem', padding: '1rem' }}>
+            <h4 style={{ fontSize: '0.875rem', fontWeight: 500, color: palette.blue.text, marginBottom: '0.5rem' }}>
               How to get Zoho API credentials:
             </h4>
-            <ol className="text-xs text-blue-800 space-y-1 list-decimal list-inside">
+            <ol style={{ fontSize: '0.75rem', color: palette.blue.text, paddingLeft: '1rem', listStyleType: 'decimal', display: 'flex', flexDirection: 'column', gap: '0.25rem' }}>
               <li>Go to Zoho API Console (api-console.zoho.{formData.region})</li>
               <li>Create a new "Server-based Application"</li>
               <li>Copy the Client ID and Client Secret</li>
@@ -417,26 +423,26 @@ export default function ZohoAPIModal({ isOpen, onClose, onSave }: ZohoAPIModalPr
 
           {/* Status Messages */}
           {testStatus === 'success' && (
-            <div className="flex items-center text-sm text-green-700 bg-green-50 px-4 py-3 rounded-lg">
-              <CheckCircle className="w-5 h-5 mr-2" />
+            <div style={{ display: 'flex', alignItems: 'center', fontSize: '0.875rem', color: palette.green.text, backgroundColor: palette.green.bg, padding: '0.75rem 1rem', borderRadius: '0.5rem' }}>
+              <CheckCircle style={{ width: '1.25rem', height: '1.25rem', marginRight: '0.5rem' }} />
               {testMessage}
             </div>
           )}
 
           {testStatus === 'error' && testMessage && (
-            <div className="flex items-center text-sm text-red-700 bg-red-50 px-4 py-3 rounded-lg">
-              <AlertCircle className="w-5 h-5 mr-2" />
+            <div style={{ display: 'flex', alignItems: 'center', fontSize: '0.875rem', color: palette.red.text, backgroundColor: palette.red.bg, padding: '0.75rem 1rem', borderRadius: '0.5rem' }}>
+              <AlertCircle style={{ width: '1.25rem', height: '1.25rem', marginRight: '0.5rem' }} />
               {testMessage}
             </div>
           )}
         </div>
 
         {/* Footer */}
-        <div className="flex items-center justify-between px-6 py-4 border-t border-gray-200 bg-gray-50">
+        <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', padding: '1rem 1.5rem', borderTop: `1px solid ${colors.cardBorder}`, backgroundColor: colors.tableBg }}>
           <button
             onClick={handleTestConnection}
             disabled={testStatus === 'loading'}
-            className="px-4 py-2 text-purple-600 border border-purple-600 rounded-lg hover:bg-purple-50 transition-colors disabled:opacity-50 flex items-center gap-2"
+            style={{ padding: '0.5rem 1rem', color: '#a855f7', border: '1px solid #a855f7', borderRadius: '0.5rem', backgroundColor: 'transparent', cursor: 'pointer', display: 'flex', alignItems: 'center', gap: '0.5rem', opacity: testStatus === 'loading' ? 0.5 : 1, transition: 'background-color 0.2s' }}
           >
             {testStatus === 'loading' ? (
               <Loader2 className="w-4 h-4 animate-spin" />
@@ -446,18 +452,18 @@ export default function ZohoAPIModal({ isOpen, onClose, onSave }: ZohoAPIModalPr
             Test Connection
           </button>
 
-          <div className="flex items-center gap-3">
+          <div style={{ display: 'flex', alignItems: 'center', gap: '0.75rem' }}>
             <button
               onClick={onClose}
               disabled={saving || savingDraft}
-              className="px-4 py-2 text-gray-700 hover:bg-gray-200 rounded-lg transition-colors disabled:opacity-50"
+              style={{ padding: '0.5rem 1rem', color: colors.text, backgroundColor: 'transparent', border: 'none', borderRadius: '0.5rem', cursor: 'pointer', opacity: (saving || savingDraft) ? 0.5 : 1, transition: 'background-color 0.2s' }}
             >
               Cancel
             </button>
             <button
               onClick={handleSaveDraft}
               disabled={saving || savingDraft}
-              className="px-4 py-2 text-gray-600 border border-gray-300 rounded-lg hover:bg-gray-50 transition-colors disabled:opacity-50 flex items-center gap-2"
+              style={{ padding: '0.5rem 1rem', color: colors.muted, border: `1px solid ${colors.inputBorder}`, borderRadius: '0.5rem', backgroundColor: 'transparent', cursor: 'pointer', display: 'flex', alignItems: 'center', gap: '0.5rem', opacity: (saving || savingDraft) ? 0.5 : 1, transition: 'background-color 0.2s' }}
             >
               {savingDraft && <Loader2 className="w-4 h-4 animate-spin" />}
               Save as Draft
@@ -465,7 +471,7 @@ export default function ZohoAPIModal({ isOpen, onClose, onSave }: ZohoAPIModalPr
             <button
               onClick={handleSave}
               disabled={saving || savingDraft}
-              className="px-4 py-2 bg-purple-600 text-white rounded-lg hover:bg-purple-700 transition-colors disabled:opacity-50 flex items-center gap-2"
+              style={{ padding: '0.5rem 1rem', backgroundColor: '#a855f7', color: 'white', borderRadius: '0.5rem', border: 'none', cursor: 'pointer', display: 'flex', alignItems: 'center', gap: '0.5rem', opacity: (saving || savingDraft) ? 0.5 : 1, transition: 'background-color 0.2s' }}
             >
               {saving && <Loader2 className="w-4 h-4 animate-spin" />}
               Save & Fetch Data
